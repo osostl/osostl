@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام الحضور والانصراف — معهد أسس التقنية والقانون</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --navy-deep:#0E1A2B; --navy-panel:#16243A; --navy-panel-2:#1C2E48;
+    --brass:#C7A248; --brass-light:#E3C878; --ivory:#F3EEE1;
+    --slate:#8B97A8; --slate-dim:#5E6C80; --line:#28384F;
+    --danger:#B85C4A; --danger-light:#D98D7C; --success:#6B9080; --radius:10px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{ background:var(--navy-deep); color:var(--ivory); font-family:'IBM Plex Sans Arabic', sans-serif; min-height:100vh; display:flex; overflow-x:hidden; }
+  ::selection{ background:var(--brass); color:var(--navy-deep); }
+
+  .sidebar{ width:230px; flex-shrink:0; background:var(--navy-panel); border-left:1px solid var(--line); display:flex; flex-direction:column; padding:26px 16px; position:sticky; top:0; height:100vh; overflow-y:auto; }
+  .brand{ display:flex; align-items:center; gap:12px; padding-bottom:20px; margin-bottom:20px; border-bottom:1px solid var(--line); }
+  .brand-mark{ width:42px; height:42px; flex-shrink:0; }
+  .brand-text h1{ font-family:'Amiri', serif; font-size:14.5px; font-weight:700; color:var(--brass-light); line-height:1.35; }
+  .brand-text p{ font-size:10px; color:var(--slate); margin-top:2px; }
+  nav{ display:flex; flex-direction:column; gap:3px; }
+  .nav-item{ display:flex; align-items:center; gap:11px; padding:10px 13px; border-radius:8px; color:var(--slate); cursor:pointer; font-size:13.8px; border-right:3px solid transparent; user-select:none; transition:background .15s, color .15s; }
+  .nav-item svg{ width:17px; height:17px; flex-shrink:0; opacity:.8; }
+  .nav-item:hover{ background:var(--navy-panel-2); color:var(--ivory); }
+  .nav-item.active{ background:var(--navy-panel-2); color:var(--brass-light); border-right-color:var(--brass); }
+  .nav-item.active svg{ opacity:1; }
+  .sidebar-foot{ margin-top:16px; padding-top:14px; border-top:1px solid var(--line); font-size:10.5px; color:var(--slate-dim); line-height:1.6; }
+
+  main{ flex:1; padding:30px 36px 60px; max-width:1080px; }
+  .page-head{ margin-bottom:22px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; }
+  .page-head h2{ font-family:'Amiri', serif; font-size:24px; font-weight:700; color:var(--ivory); }
+  .page-head .sub{ color:var(--slate); font-size:13px; margin-top:4px; }
+
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:7px; background:var(--brass); color:var(--navy-deep); border:none; padding:9px 16px; border-radius:8px; font-family:inherit; font-size:13.5px; font-weight:600; cursor:pointer; transition:background .15s, transform .1s; white-space:nowrap; }
+  .btn:hover{ background:var(--brass-light); }
+  .btn:active{ transform:scale(.98); }
+  .btn.ghost{ background:transparent; color:var(--slate); border:1px solid var(--line); }
+  .btn.ghost:hover{ color:var(--ivory); border-color:var(--slate-dim); }
+  .btn.danger{ background:var(--danger); color:var(--ivory); }
+  .btn.danger:hover{ background:var(--danger-light); }
+  .btn.small{ padding:6px 12px; font-size:12px; }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+
+  .panel{ background:var(--navy-panel); border:1px solid var(--line); border-radius:var(--radius); padding:22px; margin-bottom:20px; }
+  .panel h3{ font-family:'Amiri', serif; font-size:16px; color:var(--ivory); margin-bottom:12px; font-weight:700; }
+  .panel .hint{ font-size:12px; color:var(--slate-dim); margin-top:-6px; margin-bottom:14px; }
+  .empty-state{ color:var(--slate-dim); font-size:13px; padding:20px 8px; text-align:center; }
+
+  .field{ margin-bottom:13px; }
+  .field label{ display:block; font-size:12px; color:var(--slate); margin-bottom:6px; }
+  .field input, .field select, .field textarea{ width:100%; background:var(--navy-deep); border:1px solid var(--line); color:var(--ivory); padding:9px 12px; border-radius:7px; font-family:inherit; font-size:13.5px; outline:none; }
+  .field input:focus, .field select:focus, .field textarea:focus{ border-color:var(--brass); }
+  .two-col{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .three-col{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+  .checkbox-row{ display:flex; flex-wrap:wrap; gap:10px; }
+  .checkbox-row label{ display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--ivory); background:var(--navy-deep); border:1px solid var(--line); padding:6px 10px; border-radius:6px; cursor:pointer; }
+  .checkbox-row input{ width:auto; }
+
+  .checkin-card{ max-width:440px; margin:0 auto; text-align:center; }
+  .checkin-card .lock-icon{ width:34px; height:34px; margin:0 auto 12px; color:var(--brass); }
+  .code-input{ width:100%; text-align:center; letter-spacing:8px; font-size:24px; background:var(--navy-deep); border:1px solid var(--line); color:var(--brass-light); padding:13px; border-radius:8px; outline:none; margin-bottom:14px; }
+  .code-input:focus{ border-color:var(--brass); }
+  .checkin-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; }
+  .status-msg{ margin-top:14px; font-size:13px; min-height:20px; }
+  .status-msg.ok{ color:var(--success); }
+  .status-msg.err{ color:var(--danger-light); }
+  .status-msg.warn{ color:var(--brass-light); }
+  .camera-preview{ width:100%; max-width:220px; margin:12px auto 0; border-radius:8px; overflow:hidden; border:1px solid var(--line); display:none; }
+  .camera-preview img{ width:100%; display:block; }
+
+  .lock-screen{ max-width:340px; margin:50px auto 0; text-align:center; }
+  .lock-screen svg{ width:32px; height:32px; color:var(--brass); margin-bottom:12px; }
+  .lock-screen h3{ font-family:'Amiri', serif; font-size:17px; margin-bottom:6px; color:var(--ivory); }
+  .lock-screen p{ font-size:12px; color:var(--slate); margin-bottom:16px; }
+
+  .subtabs{ display:flex; gap:6px; margin-bottom:20px; flex-wrap:wrap; border-bottom:1px solid var(--line); padding-bottom:0; }
+  .subtab{ padding:9px 14px; font-size:13px; color:var(--slate); cursor:pointer; border-bottom:2px solid transparent; user-select:none; }
+  .subtab:hover{ color:var(--ivory); }
+  .subtab.active{ color:var(--brass-light); border-bottom-color:var(--brass); }
+  .subview{ display:none; }
+  .subview.active{ display:block; }
+
+  .stat-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin-bottom:20px; }
+  .stat-card{ background:var(--navy-panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px; position:relative; overflow:hidden; }
+  .stat-card::before{ content:""; position:absolute; inset-inline-start:0; top:0; bottom:0; width:3px; background:var(--brass); }
+  .stat-card .num{ font-family:'Amiri', serif; font-size:28px; font-weight:700; color:var(--brass-light); }
+  .stat-card .label{ color:var(--slate); font-size:12.5px; margin-top:3px; }
+  .stat-card .delta{ font-size:11.5px; margin-top:6px; }
+  .stat-card .delta.up{ color:var(--success); }
+  .stat-card .delta.down{ color:var(--danger-light); }
+
+  .heat-row{ display:flex; align-items:center; gap:10px; margin-bottom:7px; font-size:12px; }
+  .heat-row .hlabel{ width:56px; color:var(--slate); flex-shrink:0; }
+  .heat-bar-wrap{ flex:1; background:var(--navy-deep); border-radius:6px; overflow:hidden; height:16px; }
+  .heat-bar{ background:var(--brass); height:100%; border-radius:6px; }
+  .heat-row .hcount{ width:24px; text-align:left; color:var(--slate-dim); flex-shrink:0; }
+
+  .toolbar{ display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap; justify-content:space-between; }
+  .search-box{ flex:1; min-width:180px; display:flex; align-items:center; gap:8px; background:var(--navy-deep); border:1px solid var(--line); border-radius:8px; padding:8px 13px; }
+  .search-box svg{ width:14px; height:14px; color:var(--slate-dim); flex-shrink:0; }
+  .search-box input{ background:none; border:none; outline:none; color:var(--ivory); font-family:inherit; font-size:13px; width:100%; }
+  .search-box input::placeholder{ color:var(--slate-dim); }
+
+  .table-wrap{ overflow-x:auto; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  thead th{ text-align:right; color:var(--slate); font-weight:500; font-size:11.5px; padding:0 10px 9px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  tbody td{ padding:11px 10px; border-bottom:1px solid var(--line); color:var(--ivory); vertical-align:middle; white-space:nowrap; }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr:hover{ background:var(--navy-panel-2); }
+  .row-actions{ display:flex; gap:5px; justify-content:flex-end; }
+  .icon-btn{ background:none; border:none; cursor:pointer; color:var(--slate); padding:5px; border-radius:6px; display:flex; align-items:center; transition:color .15s, background .15s; }
+  .icon-btn:hover{ background:var(--navy-deep); color:var(--brass-light); }
+  .icon-btn.del:hover{ color:var(--danger-light); }
+  .icon-btn svg{ width:14.5px; height:14.5px; }
+  .code-cell{ letter-spacing:2px; color:var(--brass-light); font-weight:600; }
+
+  .pill{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; }
+  .pill.active{ background:rgba(107,144,128,.18); color:var(--success); }
+  .pill.paused{ background:rgba(184,92,74,.18); color:var(--danger-light); }
+  .pill.done{ background:rgba(199,162,72,.18); color:var(--brass-light); }
+  .pill.warn{ background:rgba(199,162,72,.18); color:var(--brass-light); }
+
+  .overlay{ position:fixed; inset:0; background:rgba(6,11,18,.7); display:none; align-items:center; justify-content:center; z-index:50; padding:20px; backdrop-filter:blur(2px); overflow-y:auto; }
+  .overlay.show{ display:flex; }
+  .modal{ background:var(--navy-panel); border:1px solid var(--line); border-radius:14px; width:100%; max-width:460px; padding:24px; max-height:88vh; overflow-y:auto; margin:auto; }
+  .modal h3{ font-family:'Amiri', serif; font-size:17px; color:var(--brass-light); margin-bottom:16px; }
+  .modal-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+
+  .toast{ position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--navy-panel-2); border:1px solid var(--brass); color:var(--ivory); padding:11px 20px; border-radius:8px; font-size:13px; opacity:0; transition:opacity .25s, transform .25s; pointer-events:none; z-index:100; max-width:90vw; text-align:center; }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .view{ display:none; }
+  .view.active{ display:block; }
+  .admin-topbar{ display:flex; justify-content:flex-end; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+  .audit-item{ font-size:12px; color:var(--slate); padding:8px 0; border-bottom:1px solid var(--line); }
+  .audit-item:last-child{ border-bottom:none; }
+  .audit-item .t{ color:var(--slate-dim); font-size:11px; }
+
+  .schedule-table th, .schedule-table td{ text-align:center; font-size:11.5px; padding:8px 6px; }
+  .schedule-table th:first-child, .schedule-table td:first-child{ text-align:right; }
+  .day-row{ display:grid; grid-template-columns:26px 60px 1fr 1fr; align-items:center; gap:8px; margin-bottom:7px; }
+  .day-row label{ font-size:12.5px; color:var(--ivory); }
+  .day-row input[type=checkbox]{ width:auto; }
+  .day-row input[type=time]{ padding:6px 8px; font-size:12.5px; }
+  #qr-video{ width:100%; border-radius:8px; background:#000; }
+  .employee-card{ text-align:center; padding:10px; }
+  .employee-card h4{ font-family:'Amiri', serif; font-size:18px; color:var(--brass-light); margin:10px 0 2px; }
+  .employee-card .pos{ font-size:12.5px; color:var(--slate); margin-bottom:14px; }
+  .employee-card .code-big{ letter-spacing:4px; font-size:20px; color:var(--ivory); margin-top:12px; font-weight:700; }
+  #employee-card-qr{ display:flex; justify-content:center; }
+
+  @media print{
+    body *{ visibility:hidden; }
+    #employee-card-overlay, #employee-card-overlay *{ visibility:visible; }
+    #employee-card-overlay{ position:absolute; inset:0; background:#fff; display:flex; align-items:center; justify-content:center; }
+    #employee-card-overlay .modal{ box-shadow:none; border:none; background:#fff; color:#0E1A2B; }
+    #employee-card-overlay .employee-card h4{ color:#0E1A2B; }
+    #employee-card-overlay .no-print{ display:none; }
+  }
+
+  @media (max-width: 820px){
+    body{ flex-direction:column; }
+    .sidebar{ width:100%; height:auto; position:relative; flex-direction:row; align-items:center; padding:14px 18px; overflow-x:auto; }
+    .brand{ border:none; padding:0; margin:0; }
+    .brand-text p{ display:none; }
+    nav{ flex-direction:row; }
+    .sidebar-foot{ display:none; }
+    main{ padding:20px 16px 50px; }
+    .two-col, .three-col{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 48 48" fill="none">
+      <circle cx="24" cy="24" r="23" stroke="#C7A248" stroke-width="1.4"/>
+      <path d="M24 10v20M14 16l-5 8a5 5 0 0010 0l-5-8zM34 16l-5 8a5 5 0 0010 0l-5-8zM10 16h8M30 16h8M17 38h14" stroke="#E3C878" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="24" y="17" font-family="Amiri, serif" font-size="10" font-weight="700" fill="#E3C878" text-anchor="middle">TL</text>
+    </svg>
+    <div class="brand-text"><h1>معهد أسس التقنية والقانون</h1><p>الحضور والموظفون</p></div>
+  </div>
+  <nav>
+    <div class="nav-item active" data-view="attendance">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2a7 7 0 00-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 00-7-7z"/><circle cx="12" cy="9" r="2.4"/></svg>
+      تسجيل الحضور
+    </div>
+    <div class="nav-item" data-view="employees">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5.5A2.5 2.5 0 0110.5 3h3A2.5 2.5 0 0116 5.5V7"/><circle cx="12" cy="12.5" r="1.4"/></svg>
+      لوحة المدير
+    </div>
+  </nav>
+  <div class="sidebar-foot">النطاق المسموح للتسجيل: حسب نطاق كل فرع.</div>
+</aside>
+
+<main>
+
+  <!-- ================= ATTENDANCE (PUBLIC) ================= -->
+  <section class="view active" id="view-attendance">
+    <div class="page-head"><div><h2>تسجيل الحضور والانصراف</h2><div class="sub">أدخل رمزك السري — النظام يتحقق من موقعك ضمن نطاق المعهد</div></div></div>
+
+    <div class="panel checkin-card">
+      <svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+      <button class="btn ghost small" id="enable-location-btn" style="width:100%; margin-bottom:14px;" onclick="enableLocation()">📍 تفعيل الموقع الجغرافي</button>
+      <div class="status-msg" id="location-status" style="margin-top:-6px; margin-bottom:10px;"></div>
+      <input class="code-input" id="checkin-code" type="password" inputmode="numeric" maxlength="6" placeholder="••••••" autocomplete="off">
+      <button class="btn ghost small" style="width:100%; margin-bottom:10px;" onclick="openQrScan()">📷 مسح رمز QR بدل الكتابة</button>
+      <div class="checkin-grid">
+        <button class="btn" onclick="checkAttendance('in')">تسجيل حضور</button>
+        <button class="btn ghost" onclick="checkAttendance('out')">تسجيل انصراف</button>
+        <button class="btn ghost small" onclick="checkAttendance('breakstart')">بدء الاستراحة</button>
+        <button class="btn ghost small" onclick="checkAttendance('breakend')">انتهاء الاستراحة</button>
+      </div>
+      <button class="btn ghost small" style="width:100%; margin-top:4px;" onclick="openMyRecordModal()">عرض سجلي</button>
+      <button class="btn ghost small" style="width:100%; margin-top:8px;" onclick="openLeaveRequestModal()">تقديم طلب إجازة/استئذان</button>
+      <div class="status-msg" id="attendance-status"></div>
+      <div class="camera-preview" id="camera-preview"><img id="camera-preview-img" alt=""></div>
+    </div>
+  </section>
+
+  <!-- ================= ADMIN (LOCKED) ================= -->
+  <section class="view" id="view-employees">
+
+    <div id="admin-lock" class="lock-screen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+      <h3 id="admin-lock-title">دخول المدير التنفيذي</h3>
+      <p id="admin-lock-sub">هذه اللوحة مخصصة للمدير فقط.</p>
+      <input class="field" style="background:var(--navy-deep); border:1px solid var(--line); color:var(--ivory); padding:10px 12px; border-radius:7px; width:100%; margin-bottom:12px; text-align:center;" type="password" id="admin-password-input" placeholder="كلمة مرور المدير">
+      <button class="btn" style="width:100%;" id="admin-lock-btn" onclick="handleAdminLockSubmit()">دخول</button>
+      <div class="status-msg err" id="admin-lock-status"></div>
+    </div>
+
+    <div id="admin-content" style="display:none;">
+      <div class="page-head">
+        <div><h2>لوحة المدير</h2><div class="sub">إدارة كاملة للنظام</div></div>
+      </div>
+      <div class="admin-topbar">
+        <button class="btn ghost small" onclick="openChangePasswordModal()">تغيير كلمة المرور</button>
+        <button class="btn ghost small" onclick="lockAdmin()">قفل اللوحة</button>
+      </div>
+
+      <div class="subtabs">
+        <div class="subtab active" data-sub="overview">نظرة عامة</div>
+        <div class="subtab" data-sub="staff">الموظفون</div>
+        <div class="subtab" data-sub="log">سجل الحضور</div>
+        <div class="subtab" data-sub="leaves">الإجازات والعطل</div>
+        <div class="subtab" data-sub="branches">الفروع</div>
+        <div class="subtab" data-sub="settings">الإعدادات والنظام</div>
+      </div>
+
+      <!-- ---- OVERVIEW ---- -->
+      <div class="subview active" id="sub-overview">
+        <div class="stat-grid">
+          <div class="stat-card"><div class="num" id="stat-attendance-rate">0%</div><div class="label">نسبة الحضور هذا الشهر</div><div class="delta" id="stat-attendance-delta"></div></div>
+          <div class="stat-card"><div class="num" id="stat-avg-hours">0</div><div class="label">متوسط ساعات العمل اليومية</div></div>
+          <div class="stat-card"><div class="num" id="stat-late-days">0</div><div class="label">مرات التأخير هذا الشهر</div></div>
+          <div class="stat-card"><div class="num" id="stat-active-employees">0</div><div class="label">عدد الموظفين النشطين</div></div>
+        </div>
+        <div class="panel">
+          <h3>أوقات الحضور الأكثر شيوعاً</h3>
+          <div id="heatmap-wrap"></div>
+        </div>
+      </div>
+
+      <!-- ---- STAFF ---- -->
+      <div class="subview" id="sub-staff">
+        <div class="panel">
+          <div class="toolbar">
+            <h3 style="margin:0;">الموظفون</h3>
+            <div style="display:flex; gap:8px;">
+              <label class="btn ghost small" style="cursor:pointer;">استيراد CSV
+                <input type="file" accept=".csv,text/csv" style="display:none;" onchange="importEmployeesCsv(event)">
+              </label>
+              <button class="btn small" onclick="openEmployeeModal()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+                إضافة موظف
+              </button>
+            </div>
+          </div>
+          <div class="hint">صيغة ملف CSV: الاسم,الوظيفة,الحالة,الفرع,الأجر بالساعة (صف أول للعناوين)</div>
+          <div class="search-box" style="margin-bottom:14px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+            <input id="search-employees" placeholder="ابحث بالاسم أو الوظيفة…" oninput="renderEmployees()">
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>الاسم</th><th>الوظيفة</th><th>الفرع</th><th>الحالة</th><th>الرمز</th><th>الأجر/ساعة</th><th></th></tr></thead>
+              <tbody id="employees-body"></tbody>
+            </table>
+          </div>
+          <div id="employees-empty" class="empty-state" style="display:none;">لا يوجد موظفون بعد</div>
+        </div>
+
+        <div class="panel">
+          <div class="toolbar">
+            <h3 style="margin:0;">جدول دوام الموظفين</h3>
+            <button class="btn small" onclick="copyScheduleText()">نسخ الجدول للإرسال</button>
+          </div>
+          <div class="hint">يتحدّث تلقائياً كل ما تعدّل جدول أي موظف — انسخه وأرسله عبر واتساب مباشرة</div>
+          <div class="table-wrap">
+            <table class="schedule-table">
+              <thead><tr><th>الموظف</th><th>أحد</th><th>اثنين</th><th>ثلاثاء</th><th>أربعاء</th><th>خميس</th><th>جمعة</th><th>سبت</th></tr></thead>
+              <tbody id="schedule-table-body"></tbody>
+            </table>
+          </div>
+          <div id="schedule-table-empty" class="empty-state" style="display:none;">لا يوجد موظفون بعد</div>
+        </div>
+      </div>
+
+      <!-- ---- ATTENDANCE LOG ---- -->
+      <div class="subview" id="sub-log">
+        <div class="panel">
+          <div class="toolbar">
+            <h3 style="margin:0;">سجل الحضور والانصراف</h3>
+            <div style="display:flex; gap:8px;">
+              <button class="btn ghost small" onclick="openManualAttendanceModal()">إضافة/تعديل يدوي</button>
+              <button class="btn small" onclick="exportMonthlyCsv()">تصدير تقرير الشهر (CSV)</button>
+            </div>
+          </div>
+          <div class="search-box" style="margin-bottom:14px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+            <input id="search-attendance" placeholder="ابحث باسم الموظف…" oninput="renderAttendance()">
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>الموظف</th><th>التاريخ</th><th>الحضور</th><th>الاستراحة</th><th>الانصراف</th><th>صافي الساعات</th><th>الحالة</th><th>المسافة</th><th></th></tr></thead>
+              <tbody id="attendance-body"></tbody>
+            </table>
+          </div>
+          <div id="attendance-empty" class="empty-state" style="display:none;">لا يوجد سجل حضور بعد</div>
+        </div>
+      </div>
+
+      <!-- ---- LEAVES & HOLIDAYS ---- -->
+      <div class="subview" id="sub-leaves">
+        <div class="panel">
+          <h3>طلبات الإجازة والاستئذان</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>الموظف</th><th>النوع</th><th>من</th><th>إلى</th><th>السبب</th><th>الحالة</th><th></th></tr></thead>
+              <tbody id="leaves-body"></tbody>
+            </table>
+          </div>
+          <div id="leaves-empty" class="empty-state" style="display:none;">لا توجد طلبات إجازة</div>
+        </div>
+        <div class="panel">
+          <div class="toolbar"><h3 style="margin:0;">تقويم العطل الرسمية</h3>
+            <button class="btn small" onclick="openHolidayModal()">إضافة عطلة</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>التاريخ</th><th>الوصف</th><th></th></tr></thead>
+              <tbody id="holidays-body"></tbody>
+            </table>
+          </div>
+          <div id="holidays-empty" class="empty-state" style="display:none;">لا توجد عطل مضافة</div>
+        </div>
+      </div>
+
+      <!-- ---- BRANCHES ---- -->
+      <div class="subview" id="sub-branches">
+        <div class="panel">
+          <div class="toolbar"><h3 style="margin:0;">الفروع ونطاقات الموقع</h3>
+            <button class="btn small" onclick="openBranchModal()">إضافة فرع</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>اسم الفرع</th><th>الإحداثيات</th><th>النطاق المسموح</th><th></th></tr></thead>
+              <tbody id="branches-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- SETTINGS & SYSTEM ---- -->
+      <div class="subview" id="sub-settings">
+        <div class="panel">
+          <h3>إعدادات الدوام</h3>
+          <div class="three-col">
+            <div class="field"><label>وقت بداية الدوام الرسمي</label><input type="time" id="setting-workstart"></div>
+            <div class="field"><label>السماح بالتأخير (دقيقة)</label><input type="number" id="setting-late" min="0"></div>
+            <div class="field"><label>صلاحية الرمز السري (يوم)</label><input type="number" id="setting-code-expiry" min="0"></div>
+          </div>
+          <div class="three-col">
+            <div class="field"><label>قفل لوحة المدير بعد الخمول (دقيقة)</label><input type="number" id="setting-idle" min="1"></div>
+            <div class="field"><label>محاولات الدخول قبل القفل المؤقت</label><input type="number" id="setting-maxattempts" min="1"></div>
+            <div class="field"><label>مدة القفل المؤقت (دقيقة)</label><input type="number" id="setting-lockout" min="1"></div>
+          </div>
+          <div class="field">
+            <label><input type="checkbox" id="setting-camera" style="width:auto; margin-left:6px;">تفعيل صورة تأكيد لحظية عند تسجيل الحضور (لا تُحفظ)</label>
+          </div>
+          <button class="btn" onclick="saveSettings()">حفظ الإعدادات</button>
+        </div>
+
+        <div class="panel">
+          <h3>النسخ الاحتياطي</h3>
+          <div class="hint">صدّر نسخة كاملة من بيانات النظام، أو استورد نسخة سابقة (سيتم استبدال البيانات الحالية).</div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn" onclick="exportBackup()">تصدير نسخة كاملة</button>
+            <label class="btn ghost" style="cursor:pointer;">استيراد نسخة
+              <input type="file" accept="application/json" style="display:none;" onchange="importBackup(event)">
+            </label>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>سجل التدقيق</h3>
+          <div class="hint">آخر العمليات التي جرت من لوحة المدير</div>
+          <div id="audit-list"></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<!-- ================= MODALS ================= -->
+<div class="overlay" id="employee-overlay"><div class="modal">
+  <h3 id="employee-modal-title">إضافة موظف</h3>
+  <input type="hidden" id="employee-id">
+  <div class="field"><label>الاسم الكامل</label><input id="employee-name" placeholder="مثال: عبدالله المطيري"></div>
+  <div class="two-col">
+    <div class="field"><label>الوظيفة</label><input id="employee-position" placeholder="مثال: مسؤول تسجيل"></div>
+    <div class="field"><label>الحالة</label><select id="employee-status"><option value="نشط">نشط</option><option value="إجازة">إجازة</option><option value="منتهي">منتهي</option></select></div>
+  </div>
+  <div class="two-col">
+    <div class="field"><label>الفرع</label><select id="employee-branch"></select></div>
+    <div class="field"><label>الأجر بالساعة (اختياري)</label><input type="number" id="employee-wage" min="0" step="0.5"></div>
+  </div>
+  <div class="field">
+    <label>أيام وساعات الدوام (لكل يوم وقته الخاص)</label>
+    <div id="employee-days-editor"></div>
+  </div>
+  <div class="modal-actions"><button class="btn ghost" onclick="closeModal('employee-overlay')">إلغاء</button><button class="btn" onclick="saveEmployee()">حفظ</button></div>
+</div></div>
+
+<div class="overlay" id="password-overlay"><div class="modal">
+  <h3>تغيير كلمة مرور المدير</h3>
+  <div class="field"><label>كلمة المرور الحالية</label><input type="password" id="current-password"></div>
+  <div class="field"><label>كلمة المرور الجديدة</label><input type="password" id="new-password"></div>
+  <div class="field"><label>تأكيد كلمة المرور الجديدة</label><input type="password" id="confirm-password"></div>
+  <div class="status-msg err" id="password-change-status"></div>
+  <div class="modal-actions"><button class="btn ghost" onclick="closeModal('password-overlay')">إلغاء</button><button class="btn" onclick="changeAdminPassword()">حفظ</button></div>
+</div></div>
+
+<div class="overlay" id="manual-attendance-overlay"><div class="modal">
+  <h3>إضافة/تعديل سجل حضور يدوياً</h3>
+  <input type="hidden" id="manual-att-id">
+  <div class="field"><label>الموظف</label><select id="manual-att-employee"></select></div>
+  <div class="field"><label>التاريخ</label><input type="date" id="manual-att-date"></div>
+  <div class="two-col">
+    <div class="field"><label>وقت الحضور</label><input type="time" id="manual-att-in"></div>
+    <div class="field"><label>وقت الانصراف</label><input type="time" id="manual-att-out"></div>
+  </div>
+  <div class="modal-actions"><button class="btn ghost" onclick="closeModal('manual-attendance-overlay')">إلغاء</button><button class="btn" onclick="saveManualAttendance()">حفظ</button></div>
+</div></div>
+
+<div class="overlay" id="branch-overlay"><div class="modal">
+  <h3 id="branch-modal-title">إضافة فرع</h3>
+  <input type="hidden" id="branch-id">
+  <div class="field"><label>اسم الفرع</label><input id="branch-name" placeholder="مثال: الفرع الرئيسي"></div>
+  <div class="two-col">
+    <div class="field"><label>خط العرض (Latitude)</label><input id="branch-lat" placeholder="27.4666050"></div>
+    <div class="field"><label>خط الطول (Longitude)</label><input id="branch-lng" placeholder="41.6576966"></div>
+  </div>
+  <div class="field"><label>نطاق السماح (متر)</label><input type="number" id="branch-radius" min="10" value="50"></div>
+  <div class="modal-actions"><button class="btn ghost" onclick="closeModal('branch-overlay')">إلغاء</button><button class="btn" onclick="saveBranch()">حفظ</button></div>
+</div></div>
+
+<div class="overlay" id="holiday-overlay"><div class="modal">
+  <h3>إضافة عطلة رسمية</h3>
+  <div class="field"><label>التاريخ</label><input type="date" id="holiday-date"></div>
+  <div class="field"><label>الوصف</label><input id="holiday-name" placeholder="مثال: اليوم الوطني"></div>
+  <div class="modal-actions"><button class="btn ghost" onclick="closeModal('holiday-overlay')">إلغاء</button><button class="btn" onclick="saveHoliday()">حفظ</button></div>
+</div></div>
+
+<div class="overlay" id="leave-request-overlay"><div class="modal">
+  <h3>تقديم طلب إجازة/استئذان</h3>
+  <div class="field"><label>رمزك السري</label><input type="password" id="leave-code" inputmode="numeric" maxlength="6"></div>
+  <div class="field"><label>النوع</label><select id="leave-type"><option value="إجازة">إجازة</option><option value="استئذان">استئذان</option></select></div>
+  <div class="two-col">
+    <div class="field"><label>من تاريخ</label><input type="date" id="leave-from"></div>
+    <div class="field"><label>إلى تاريخ</label><input type="date" id="leave-to"></div>
+  </div>
+  <div class="field"><label>السبب (اختياري)</label><textarea id="leave-reason" rows="2"></textarea></div>
+  <div class="status-msg err" id="leave-request-status"></div>
+  <div class="modal-actions"><button class="btn ghost" onclick="closeModal('leave-request-overlay')">إلغاء</button><button class="btn" onclick="submitLeaveRequest()">إرسال الطلب</button></div>
+</div></div>
+
+<div class="overlay" id="my-record-overlay"><div class="modal">
+  <h3>سجلي الشخصي</h3>
+  <div class="field"><label>رمزك السري</label><input type="password" id="my-record-code" inputmode="numeric" maxlength="6"></div>
+  <button class="btn" style="width:100%;" onclick="loadMyRecord()">عرض السجل</button>
+  <div id="my-record-results" style="margin-top:14px;"></div>
+</div></div>
+
+<div class="overlay" id="qr-scan-overlay"><div class="modal">
+  <h3>مسح رمز QR</h3>
+  <video id="qr-video" autoplay playsinline muted></video>
+  <canvas id="qr-canvas" style="display:none;"></canvas>
+  <div class="status-msg err" id="qr-scan-status"></div>
+  <div class="modal-actions"><button class="btn ghost" style="width:100%;" onclick="closeQrScan()">إلغاء</button></div>
+</div></div>
+
+<div class="overlay" id="employee-card-overlay"><div class="modal">
+  <div class="employee-card">
+    <div style="font-family:'Amiri',serif; font-size:13px; color:var(--brass-light);">معهد أسس التقنية والقانون</div>
+    <div id="employee-card-qr"></div>
+    <h4 id="card-name"></h4>
+    <div class="pos" id="card-position"></div>
+    <div class="code-big" id="card-code"></div>
+  </div>
+  <div class="modal-actions no-print"><button class="btn ghost" onclick="closeModal('employee-card-overlay')">إغلاق</button><button class="btn" onclick="printEmployeeCard()">طباعة</button></div>
+</div></div>
+
+<div class="overlay" id="confirm-overlay"><div class="modal">
+  <h3 id="confirm-title">تأكيد</h3>
+  <p id="confirm-message" style="color:var(--slate); font-size:13.5px; margin-bottom:4px;"></p>
+  <div class="modal-actions"><button class="btn ghost" id="confirm-cancel-btn">إلغاء</button><button class="btn danger" id="confirm-ok-btn">تأكيد</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let employees = [], attendance = [], branches = [], leaves = [], holidays = [], auditLog = [];
+let settings = { workStart:'08:00', lateThresholdMin:15, codeExpiryDays:90, idleLockMin:5, maxAttempts:5, lockoutMin:10, cameraEnabled:false };
+let adminPassword = null, adminUnlocked = false;
+let failedAttempts = 0, lockoutUntil = 0;
+let idleTimer = null;
+
+/* ====== FIREBASE SETUP — ضع بيانات مشروعك هنا ======
+   روح Firebase Console > إعدادات المشروع > Your apps > انسخ القيم من firebaseConfig والصقها بالأسفل */
+const firebaseConfig = {
+  apiKey: "AIzaSyAml0sYwe5uSGohKdkGc7fEWEZQJG5Y7zE",
+  authDomain: "osostl.firebaseapp.com",
+  projectId: "osostl",
+  storageBucket: "osostl.firebasestorage.app",
+  messagingSenderId: "939077858833",
+  appId: "1:939077858833:web:8eca076a606743292063b0"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const FS_COLLECTION = 'institute-data';
+
+async function fsGet(key){
+  const doc = await db.collection(FS_COLLECTION).doc(key).get();
+  return doc.exists ? doc.data().value : null;
+}
+async function fsSet(key, value){
+  await db.collection(FS_COLLECTION).doc(key).set({ value, updatedAt: new Date().toISOString() });
+}
+/* ====================================================== */
+
+const DAY_NAMES = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const localDateStr = d => { const p = n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; };
+const timeStr = iso => iso ? new Date(iso).toLocaleTimeString('ar-SA', {hour:'2-digit', minute:'2-digit'}) : '';
+
+function distanceMeters(lat1, lng1, lat2, lng2){
+  const R = 6371000, toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2-lat1), dLng = toRad(lng2-lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function genCode(){
+  let code;
+  do{ code = String(Math.floor(100000 + Math.random()*900000)); }
+  while(employees.some(e=>e.code===code));
+  return code;
+}
+
+/* ---------------- Load / Save ---------------- */
+async function loadAll(){
+  try{ const r = await fsGet('employees-data'); employees = r ? JSON.parse(r) : []; }catch(e){ employees = []; }
+  try{ const r = await fsGet('attendance-data'); attendance = r ? JSON.parse(r) : []; }catch(e){ attendance = []; }
+  try{ const r = await fsGet('branches-data'); branches = r ? JSON.parse(r) : null; }catch(e){ branches = null; }
+  if(!branches || !branches.length){ branches = [{ id:'main', name:'المقر الرئيسي', lat:27.4666050, lng:41.6576966, radius:50 }]; await saveBranches(); }
+  try{ const r = await fsGet('leaves-data'); leaves = r ? JSON.parse(r) : []; }catch(e){ leaves = []; }
+  try{ const r = await fsGet('holidays-data'); holidays = r ? JSON.parse(r) : []; }catch(e){ holidays = []; }
+  try{ const r = await fsGet('audit-log-data'); auditLog = r ? JSON.parse(r) : []; }catch(e){ auditLog = []; }
+  try{ const r = await fsGet('settings-data'); if(r) settings = Object.assign(settings, JSON.parse(r)); }catch(e){}
+  try{ const r = await fsGet('admin-password'); adminPassword = r ? JSON.parse(r) : null; }catch(e){ adminPassword = null; }
+  renderAll();
+  updateAdminLockScreen();
+  fillSettingsForm();
+}
+async function saveEmployees(){ try{ await fsSet('employees-data', JSON.stringify(employees)); }catch(e){ showToast('تعذّر الحفظ — تأكد من إعداد Firebase'); } }
+async function saveAttendanceData(){ try{ await fsSet('attendance-data', JSON.stringify(attendance)); }catch(e){ showToast('تعذّر الحفظ — تأكد من إعداد Firebase'); } }
+async function saveBranches(){ try{ await fsSet('branches-data', JSON.stringify(branches)); }catch(e){ showToast('تعذّر الحفظ — تأكد من إعداد Firebase'); } }
+async function saveLeaves(){ try{ await fsSet('leaves-data', JSON.stringify(leaves)); }catch(e){ showToast('تعذّر الحفظ — تأكد من إعداد Firebase'); } }
+async function saveHolidays(){ try{ await fsSet('holidays-data', JSON.stringify(holidays)); }catch(e){ showToast('تعذّر الحفظ — تأكد من إعداد Firebase'); } }
+async function saveAuditLog(){ try{ await fsSet('audit-log-data', JSON.stringify(auditLog)); }catch(e){} }
+async function saveSettingsData(){ try{ await fsSet('settings-data', JSON.stringify(settings)); }catch(e){ showToast('تعذّر الحفظ — تأكد من إعداد Firebase'); } }
+async function saveAdminPassword(pw){ try{ await fsSet('admin-password', JSON.stringify(pw)); adminPassword = pw; }catch(e){ showToast('تعذّر الحفظ — تأكد من إعداد Firebase'); } }
+
+function logAudit(text){
+  auditLog.unshift({ id: uid(), ts: new Date().toISOString(), text });
+  if(auditLog.length > 200) auditLog = auditLog.slice(0,200);
+  saveAuditLog();
+  renderAuditLog();
+}
+
+function renderAll(){ renderEmployees(); renderAttendance(); renderBranches(); renderLeaves(); renderHolidays(); renderAuditLog(); renderOverview(); renderScheduleTable(); }
+
+/* ---------------- Navigation ---------------- */
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click', ()=>{
+    document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
+    item.classList.add('active');
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+item.dataset.view).classList.add('active');
+  });
+});
+document.querySelectorAll('.subtab').forEach(item=>{
+  item.addEventListener('click', ()=>{
+    document.querySelectorAll('.subtab').forEach(i=>i.classList.remove('active'));
+    item.classList.add('active');
+    document.querySelectorAll('.subview').forEach(v=>v.classList.remove('active'));
+    document.getElementById('sub-'+item.dataset.sub).classList.add('active');
+    if(item.dataset.sub==='overview') renderOverview();
+  });
+});
+document.getElementById('admin-content').addEventListener('click', resetIdleTimer);
+document.getElementById('admin-content').addEventListener('keydown', resetIdleTimer);
+
+function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2400); }
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+
+function confirmDialog(message){
+  return new Promise(resolve=>{
+    document.getElementById('confirm-message').textContent = message;
+    document.getElementById('confirm-overlay').classList.add('show');
+    const okBtn = document.getElementById('confirm-ok-btn');
+    const cancelBtn = document.getElementById('confirm-cancel-btn');
+    const cleanup = (result) => {
+      document.getElementById('confirm-overlay').classList.remove('show');
+      okBtn.onclick = null; cancelBtn.onclick = null;
+      resolve(result);
+    };
+    okBtn.onclick = () => cleanup(true);
+    cancelBtn.onclick = () => cleanup(false);
+  });
+}
+function fallbackCopy(text){
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast(ok ? 'تم نسخ الجدول — الصقه بالواتساب' : 'تعذّر النسخ التلقائي — انسخ يدوياً من المربع اللي بيظهر');
+    if(!ok) window.prompt('انسخ النص يدوياً (Ctrl/Cmd+C):', text);
+  }catch(e){
+    window.prompt('انسخ النص يدوياً (Ctrl/Cmd+C):', text);
+  }
+}
+
+/* ---------------- Admin lock / security ---------------- */
+function updateAdminLockScreen(){
+  const isSetup = adminPassword === null;
+  document.getElementById('admin-lock-title').textContent = isSetup ? 'إنشاء كلمة مرور المدير' : 'دخول المدير التنفيذي';
+  document.getElementById('admin-lock-sub').textContent = isSetup ? 'لا توجد كلمة مرور بعد — اختر كلمة مرور للدخول مستقبلاً.' : 'هذه اللوحة مخصصة للمدير فقط.';
+  document.getElementById('admin-lock-btn').textContent = isSetup ? 'إنشاء ودخول' : 'دخول';
+}
+function handleAdminLockSubmit(){
+  const statusEl = document.getElementById('admin-lock-status');
+  if(Date.now() < lockoutUntil){
+    const remain = Math.ceil((lockoutUntil - Date.now())/60000);
+    statusEl.textContent = `تم قفل الدخول مؤقتاً — حاول بعد ${remain} دقيقة`;
+    return;
+  }
+  const val = document.getElementById('admin-password-input').value;
+  if(adminPassword === null){
+    if(!val || val.length < 4){ statusEl.textContent = 'اختر كلمة مرور لا تقل عن 4 أحرف'; return; }
+    saveAdminPassword(val);
+    statusEl.textContent = '';
+    unlockAdmin();
+    showToast('تم إنشاء كلمة مرور المدير');
+  }else{
+    if(val !== adminPassword){
+      failedAttempts++;
+      if(failedAttempts >= settings.maxAttempts){
+        lockoutUntil = Date.now() + settings.lockoutMin*60000;
+        failedAttempts = 0;
+        statusEl.textContent = `محاولات كثيرة فاشلة — تم القفل ${settings.lockoutMin} دقيقة`;
+      }else{
+        statusEl.textContent = `كلمة المرور غير صحيحة (${failedAttempts}/${settings.maxAttempts})`;
+      }
+      return;
+    }
+    failedAttempts = 0;
+    statusEl.textContent = '';
+    unlockAdmin();
+  }
+  document.getElementById('admin-password-input').value = '';
+}
+function unlockAdmin(){
+  adminUnlocked = true;
+  document.getElementById('admin-lock').style.display = 'none';
+  document.getElementById('admin-content').style.display = 'block';
+  renderAll();
+  resetIdleTimer();
+}
+function lockAdmin(auto){
+  adminUnlocked = false;
+  document.getElementById('admin-lock').style.display = 'block';
+  document.getElementById('admin-content').style.display = 'none';
+  document.getElementById('admin-password-input').value = '';
+  document.getElementById('admin-lock-status').textContent = '';
+  if(idleTimer) clearInterval(idleTimer);
+  if(auto) showToast('تم قفل اللوحة تلقائياً لعدم النشاط');
+}
+let lastActivity = Date.now();
+function resetIdleTimer(){
+  lastActivity = Date.now();
+  if(idleTimer) clearInterval(idleTimer);
+  idleTimer = setInterval(()=>{
+    if(adminUnlocked && Date.now() - lastActivity > settings.idleLockMin*60000){ lockAdmin(true); }
+  }, 15000);
+}
+
+function openChangePasswordModal(){
+  document.getElementById('current-password').value='';
+  document.getElementById('new-password').value='';
+  document.getElementById('confirm-password').value='';
+  document.getElementById('password-change-status').textContent='';
+  document.getElementById('password-overlay').classList.add('show');
+}
+async function changeAdminPassword(){
+  const cur=document.getElementById('current-password').value, nw=document.getElementById('new-password').value, cf=document.getElementById('confirm-password').value;
+  const statusEl=document.getElementById('password-change-status');
+  if(cur !== adminPassword){ statusEl.textContent='كلمة المرور الحالية غير صحيحة'; return; }
+  if(!nw || nw.length<4){ statusEl.textContent='كلمة المرور الجديدة قصيرة جداً'; return; }
+  if(nw !== cf){ statusEl.textContent='كلمتا المرور غير متطابقتين'; return; }
+  await saveAdminPassword(nw);
+  closeModal('password-overlay');
+  logAudit('تم تغيير كلمة مرور المدير');
+  showToast('تم تغيير كلمة المرور');
+}
+
+/* ---------------- Branches ---------------- */
+function fillBranchSelect(sel, selected){
+  sel.innerHTML = branches.map(b=>`<option value="${b.id}" ${b.id===selected?'selected':''}>${escapeHtml(b.name)}</option>`).join('');
+}
+function openBranchModal(id){
+  document.getElementById('branch-modal-title').textContent = id ? 'تعديل فرع' : 'إضافة فرع';
+  document.getElementById('branch-id').value = id || '';
+  const b = id ? branches.find(x=>x.id===id) : null;
+  document.getElementById('branch-name').value = b ? b.name : '';
+  document.getElementById('branch-lat').value = b ? b.lat : '';
+  document.getElementById('branch-lng').value = b ? b.lng : '';
+  document.getElementById('branch-radius').value = b ? b.radius : 50;
+  document.getElementById('branch-overlay').classList.add('show');
+}
+async function saveBranch(){
+  const name = document.getElementById('branch-name').value.trim();
+  const lat = parseFloat(document.getElementById('branch-lat').value);
+  const lng = parseFloat(document.getElementById('branch-lng').value);
+  const radius = parseInt(document.getElementById('branch-radius').value) || 50;
+  if(!name || isNaN(lat) || isNaN(lng)){ showToast('الرجاء تعبئة جميع الحقول بشكل صحيح'); return; }
+  const id = document.getElementById('branch-id').value;
+  const data = { id: id || uid(), name, lat, lng, radius };
+  if(id){ branches = branches.map(b=>b.id===id?data:b); }
+  else{ branches.push(data); }
+  await saveBranches();
+  closeModal('branch-overlay');
+  renderAll();
+  logAudit(`تم حفظ بيانات الفرع: ${name}`);
+  showToast('تم حفظ الفرع');
+}
+async function deleteBranch(id){
+  if(branches.length<=1){ showToast('لا يمكن حذف آخر فرع'); return; }
+  const ok = await confirmDialog('حذف هذا الفرع؟');
+  if(!ok) return;
+  const b = branches.find(x=>x.id===id);
+  branches = branches.filter(x=>x.id!==id);
+  saveBranches();
+  renderAll();
+  logAudit(`تم حذف الفرع: ${b?.name||''}`);
+}
+function renderBranches(){
+  const body = document.getElementById('branches-body');
+  if(!body) return;
+  body.innerHTML = branches.map(b=>`
+    <tr>
+      <td>${escapeHtml(b.name)}</td>
+      <td>${b.lat.toFixed(5)}, ${b.lng.toFixed(5)}</td>
+      <td>${b.radius} م</td>
+      <td><div class="row-actions">
+        <button class="icon-btn" onclick="openBranchModal('${b.id}')" title="تعديل"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+        <button class="icon-btn del" onclick="deleteBranch('${b.id}')" title="حذف"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+      </div></td>
+    </tr>`).join('');
+  const empSel = document.getElementById('employee-branch');
+  if(empSel) fillBranchSelect(empSel, empSel.value);
+}
+
+/* ---------------- Employees ---------------- */
+function buildDaysEditor(days){
+  const wrap = document.getElementById('employee-days-editor');
+  wrap.innerHTML = DAY_NAMES.map((name,d)=>{
+    const cfg = days && days[d];
+    const checked = cfg ? 'checked' : '';
+    const start = cfg ? cfg.start : '08:00';
+    const end = cfg ? cfg.end : '16:00';
+    return `<div class="day-row">
+      <input type="checkbox" id="day-en-${d}" ${checked} onchange="document.getElementById('day-start-${d}').disabled=!this.checked; document.getElementById('day-end-${d}').disabled=!this.checked;">
+      <label>${name}</label>
+      <input type="time" id="day-start-${d}" value="${start}" ${checked?'':'disabled'}>
+      <input type="time" id="day-end-${d}" value="${end}" ${checked?'':'disabled'}>
+    </div>`;
+  }).join('');
+}
+function readDaysEditor(){
+  const days = {};
+  DAY_NAMES.forEach((name,d)=>{
+    const en = document.getElementById(`day-en-${d}`);
+    if(en && en.checked){
+      days[d] = { start: document.getElementById(`day-start-${d}`).value, end: document.getElementById(`day-end-${d}`).value };
+    }
+  });
+  return days;
+}
+
+function openEmployeeModal(id){
+  document.getElementById('employee-modal-title').textContent = id ? 'تعديل بيانات موظف' : 'إضافة موظف';
+  document.getElementById('employee-id').value = id || '';
+  const e = id ? employees.find(x=>x.id===id) : null;
+  document.getElementById('employee-name').value = e ? e.name : '';
+  document.getElementById('employee-position').value = e ? e.position : '';
+  document.getElementById('employee-status').value = e ? e.status : 'نشط';
+  document.getElementById('employee-wage').value = e ? (e.wage||'') : '';
+  fillBranchSelect(document.getElementById('employee-branch'), e ? e.branchId : branches[0].id);
+  buildDaysEditor(e?.schedule?.days);
+  document.getElementById('employee-overlay').classList.add('show');
+}
+async function saveEmployee(){
+  const name = document.getElementById('employee-name').value.trim();
+  if(!name){ showToast('الرجاء إدخال اسم الموظف'); return; }
+  const id = document.getElementById('employee-id').value;
+  const existing = id ? employees.find(e=>e.id===id) : null;
+  const days = readDaysEditor();
+  const data = {
+    id: id || uid(), name,
+    position: document.getElementById('employee-position').value.trim(),
+    status: document.getElementById('employee-status').value,
+    branchId: document.getElementById('employee-branch').value,
+    wage: parseFloat(document.getElementById('employee-wage').value) || 0,
+    schedule: { days },
+    code: existing ? existing.code : genCode(),
+    codeCreatedAt: existing ? existing.codeCreatedAt : new Date().toISOString()
+  };
+  if(id){ employees = employees.map(e=>e.id===id?data:e); }
+  else{ employees.push(data); }
+  await saveEmployees();
+  closeModal('employee-overlay');
+  renderAll();
+  logAudit(`تم حفظ بيانات الموظف: ${name}`);
+  showToast('تم حفظ بيانات الموظف — جدول الدوام محدّث بالأسفل');
+}
+async function deleteEmployee(id){
+  const ok = await confirmDialog('هل تريد حذف هذا الموظف؟ سيبقى سجل حضوره السابق محفوظاً.');
+  if(!ok) return;
+  const e = employees.find(x=>x.id===id);
+  employees = employees.filter(e=>e.id!==id);
+  saveEmployees();
+  renderAll();
+  logAudit(`تم حذف الموظف: ${e?.name||''}`);
+  showToast('تم حذف الموظف');
+}
+async function regenerateCode(id){
+  const ok = await confirmDialog('توليد رمز جديد لهذا الموظف؟ الرمز القديم لن يعمل بعدها.');
+  if(!ok) return;
+  const e = employees.find(x=>x.id===id);
+  employees = employees.map(e=> e.id===id ? {...e, code: genCode(), codeCreatedAt: new Date().toISOString()} : e);
+  await saveEmployees();
+  renderAll();
+  logAudit(`تم توليد رمز جديد للموظف: ${e?.name||''}`);
+  showToast('تم توليد رمز جديد');
+}
+function isCodeExpired(e){
+  if(!settings.codeExpiryDays || !e.codeCreatedAt) return false;
+  const days = (Date.now() - new Date(e.codeCreatedAt).getTime()) / 86400000;
+  return days > settings.codeExpiryDays;
+}
+function renderEmployees(){
+  if(!adminUnlocked) return;
+  const q = (document.getElementById('search-employees')?.value || '').trim();
+  const filtered = employees.filter(e => e.name.includes(q) || (e.position||'').includes(q));
+  const body = document.getElementById('employees-body'), empty = document.getElementById('employees-empty');
+  if(!filtered.length){ body.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  body.innerHTML = filtered.map(e=>{
+    const pillClass = e.status==='نشط' ? 'active' : (e.status==='منتهي' ? 'paused' : 'done');
+    const branchName = branches.find(b=>b.id===e.branchId)?.name || '—';
+    const expired = isCodeExpired(e);
+    return `<tr>
+      <td>${escapeHtml(e.name)}</td>
+      <td>${escapeHtml(e.position)||'—'}</td>
+      <td>${escapeHtml(branchName)}</td>
+      <td><span class="pill ${pillClass}">${escapeHtml(e.status)}</span></td>
+      <td class="code-cell">${escapeHtml(e.code)} ${expired?'<span class="pill warn">منتهي</span>':''}</td>
+      <td>${e.wage ? e.wage+' ر.س' : '—'}</td>
+      <td><div class="row-actions">
+        <button class="icon-btn" onclick="regenerateCode('${e.id}')" title="توليد رمز جديد"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 11-2.6-6.4M21 4v5h-5"/></svg></button>
+        <button class="icon-btn" onclick="openEmployeeCard('${e.id}')" title="بطاقة QR للطباعة"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM19 14h2v2h-2zM14 19h2v2h-2zM19 19h2v2h-2z"/></svg></button>
+        <button class="icon-btn" onclick="openEmployeeModal('${e.id}')" title="تعديل"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+        <button class="icon-btn del" onclick="deleteEmployee('${e.id}')" title="حذف"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderScheduleTable(){
+  if(!adminUnlocked) return;
+  const body = document.getElementById('schedule-table-body'), empty = document.getElementById('schedule-table-empty');
+  if(!employees.length){ body.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  body.innerHTML = employees.map(e=>{
+    const cells = DAY_NAMES.map((name,d)=>{
+      const cfg = e.schedule?.days?.[d];
+      return `<td>${cfg ? cfg.start+'-'+cfg.end : '—'}</td>`;
+    }).join('');
+    return `<tr><td>${escapeHtml(e.name)}</td>${cells}</tr>`;
+  }).join('');
+}
+function copyScheduleText(){
+  if(!employees.length){ showToast('لا يوجد موظفون بعد'); return; }
+  let text = 'جدول دوام الموظفين — معهد أسس التقنية والقانون\n\n';
+  employees.forEach(e=>{
+    text += `${e.name}:\n`;
+    DAY_NAMES.forEach((name,d)=>{
+      const cfg = e.schedule?.days?.[d];
+      if(cfg) text += `  ${name}: ${cfg.start} - ${cfg.end}\n`;
+    });
+    text += '\n';
+  });
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>{
+      showToast('تم نسخ الجدول — الصقه بالواتساب');
+    }).catch(()=>{ fallbackCopy(text); });
+  }else{
+    fallbackCopy(text);
+  }
+}
+
+/* ---------------- CSV import ---------------- */
+function importEmployeesCsv(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try{
+      const lines = reader.result.split(/\r?\n/).filter(l=>l.trim());
+      let added = 0;
+      lines.slice(1).forEach(line=>{
+        const parts = line.split(',').map(p=>p.trim());
+        const [name, position, status, branchName, wage] = parts;
+        if(!name) return;
+        const branch = branches.find(b=>b.name===branchName) || branches[0];
+        employees.push({
+          id: uid(), name, position: position||'', status: status||'نشط',
+          branchId: branch.id, wage: parseFloat(wage)||0,
+          schedule: { days: {0:{start:'08:00',end:'16:00'},1:{start:'08:00',end:'16:00'},2:{start:'08:00',end:'16:00'},3:{start:'08:00',end:'16:00'},4:{start:'08:00',end:'16:00'}} },
+          code: genCode(), codeCreatedAt: new Date().toISOString()
+        });
+        added++;
+      });
+      await saveEmployees();
+      renderAll();
+      logAudit(`تم استيراد ${added} موظف عبر CSV`);
+      showToast(`تم استيراد ${added} موظف بنجاح`);
+    }catch(e){ showToast('تعذّر قراءة الملف — تأكد من الصيغة'); }
+  };
+  reader.readAsText(file);
+  evt.target.value = '';
+}
+
+/* ---------------- QR: employee printable card ---------------- */
+function openEmployeeCard(id){
+  const e = employees.find(x=>x.id===id);
+  if(!e) return;
+  document.getElementById('card-name').textContent = e.name;
+  document.getElementById('card-position').textContent = e.position || '';
+  document.getElementById('card-code').textContent = e.code;
+  const qrWrap = document.getElementById('employee-card-qr');
+  qrWrap.innerHTML = '';
+  new QRCode(qrWrap, { text: e.code, width:160, height:160, colorDark:'#0E1A2B', colorLight:'#F3EEE1' });
+  document.getElementById('employee-card-overlay').classList.add('show');
+}
+function printEmployeeCard(){ window.print(); }
+
+/* ---------------- QR scanning for check-in ---------------- */
+let qrStream = null, qrScanning = false;
+function openQrScan(){
+  document.getElementById('qr-scan-overlay').classList.add('show');
+  const video = document.getElementById('qr-video');
+  navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } }).then(stream=>{
+    qrStream = stream;
+    video.srcObject = stream;
+    video.play();
+    qrScanning = true;
+    requestAnimationFrame(scanQrFrame);
+  }).catch(()=>{
+    document.getElementById('qr-scan-status').textContent = 'تعذّر الوصول للكاميرا — تأكد من الإذن';
+  });
+}
+function closeQrScan(){
+  qrScanning = false;
+  if(qrStream){ qrStream.getTracks().forEach(t=>t.stop()); qrStream = null; }
+  document.getElementById('qr-scan-overlay').classList.remove('show');
+}
+function scanQrFrame(){
+  if(!qrScanning) return;
+  const video = document.getElementById('qr-video');
+  if(video.readyState === video.HAVE_ENOUGH_DATA){
+    const canvas = document.getElementById('qr-canvas');
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imgData.data, imgData.width, imgData.height);
+    if(code && code.data){
+      document.getElementById('checkin-code').value = code.data.trim();
+      closeQrScan();
+      showToast('تم مسح الرمز بنجاح');
+      return;
+    }
+  }
+  requestAnimationFrame(scanQrFrame);
+}
+function setAttendanceStatus(msg, kind){ const el=document.getElementById('attendance-status'); el.textContent=msg; el.className='status-msg'+(kind?' '+kind:''); }
+function setLocationStatus(msg, kind){ const el=document.getElementById('location-status'); el.textContent=msg; el.className='status-msg'+(kind?' '+kind:''); }
+
+function geoErrorMessage(err){
+  if(err && err.code === 1) return 'تم رفض إذن الموقع — إذا كنت تفتح الصفحة من داخل تطبيق آخر (مثل تطبيق Claude) افتحها من Safari أو Chrome مباشرة، وتأكد من تفعيل خدمة الموقع لهذا المتصفح من إعدادات الجهاز';
+  if(err && err.code === 2) return 'تعذّر تحديد موقعك حالياً — تأكد من تفعيل GPS وحاول مرة أخرى';
+  if(err && err.code === 3) return 'استغرق تحديد الموقع وقتاً طويلاً — حاول مرة أخرى في مكان مفتوح';
+  return 'تعذّر الحصول على موقعك';
+}
+
+let locationGranted = false;
+function enableLocation(){
+  if(!navigator.geolocation){ setLocationStatus('هذا المتصفح لا يدعم تحديد الموقع الجغرافي إطلاقاً', 'err'); return; }
+  setLocationStatus('جارِ طلب إذن الموقع…', '');
+  navigator.geolocation.getCurrentPosition((pos)=>{
+    locationGranted = true;
+    setLocationStatus(`تم تفعيل الموقع بنجاح ✓ (دقة القراءة: ±${Math.round(pos.coords.accuracy)} م)`, 'ok');
+  }, (err)=>{
+    locationGranted = false;
+    setLocationStatus(geoErrorMessage(err), 'err');
+  }, { enableHighAccuracy:true, timeout:12000 });
+}
+
+function findMatchingBranch(lat, lng, employee){
+  const candidates = employee.branchId ? branches.filter(b=>b.id===employee.branchId) : branches;
+  let best = null, bestDist = Infinity;
+  candidates.forEach(b=>{
+    const d = distanceMeters(lat,lng,b.lat,b.lng);
+    if(d < bestDist){ bestDist = d; best = b; }
+  });
+  return { branch: best, dist: bestDist, within: best && bestDist <= best.radius };
+}
+
+async function maybeCaptureSnapshot(){
+  if(!settings.cameraEnabled || !navigator.mediaDevices?.getUserMedia) return;
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user' } });
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    await video.play();
+    await new Promise(r=>setTimeout(r,400));
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video,0,0);
+    const dataUrl = canvas.toDataURL('image/jpeg', .7);
+    stream.getTracks().forEach(t=>t.stop());
+    const wrap = document.getElementById('camera-preview'), img = document.getElementById('camera-preview-img');
+    img.src = dataUrl; wrap.style.display = 'block';
+    setTimeout(()=>{ wrap.style.display='none'; img.src=''; }, 3000);
+  }catch(e){ /* camera unavailable or denied — silently skip, not a blocker */ }
+}
+
+function checkAttendance(type, retryAccuracy){
+  const code = document.getElementById('checkin-code').value.trim();
+  if(!code){ setAttendanceStatus('الرجاء إدخال رمزك السري', 'err'); return; }
+  const employee = employees.find(e=>e.code===code);
+  if(!employee){ setAttendanceStatus('الرمز غير صحيح', 'err'); return; }
+  if(isCodeExpired(employee)){ setAttendanceStatus('انتهت صلاحية رمزك — تواصل مع المدير لتجديده', 'err'); return; }
+  if(!navigator.geolocation){ setAttendanceStatus('المتصفح لا يدعم تحديد الموقع الجغرافي', 'err'); return; }
+  setAttendanceStatus('جارِ تحديد موقعك…', '');
+  navigator.geolocation.getCurrentPosition(async (pos)=>{
+    const { latitude, longitude, accuracy } = pos.coords;
+    if(accuracy > 30 && !retryAccuracy){
+      setAttendanceStatus(`دقة تحديد موقعك ضعيفة (±${Math.round(accuracy)} م) — جارِ إعادة المحاولة تلقائياً…`, 'warn');
+      setTimeout(()=>checkAttendance(type, true), 1500);
+      return;
+    }
+    const match = findMatchingBranch(latitude, longitude, employee);
+    if(!match.within){
+      setAttendanceStatus(`أنت خارج نطاق ${match.branch?escapeHtml(match.branch.name):'المعهد'} — المسافة الحالية: ${Math.round(match.dist)} م`, 'err');
+      return;
+    }
+    const today = localDateStr(new Date());
+    const nowIso = new Date().toISOString();
+    let rec = attendance.find(a => a.employeeId===employee.id && a.date===today);
+    if(type==='in'){
+      if(rec && rec.timeInAt){ setAttendanceStatus('تم تسجيل حضورك مسبقاً اليوم', 'err'); return; }
+      if(!rec){ rec = { id: uid(), employeeId: employee.id, date: today, timeInAt:'', breakOutAt:'', breakInAt:'', timeOutAt:'', distance: Math.round(match.dist) }; attendance.push(rec); }
+      rec.timeInAt = nowIso; rec.distance = Math.round(match.dist);
+      const dow = new Date(nowIso).getDay();
+      const daySched = employee.schedule?.days?.[dow];
+      const startStr = daySched ? daySched.start : settings.workStart;
+      const [h,m] = startStr.split(':').map(Number);
+      const threshold = new Date(nowIso); threshold.setHours(h, m + settings.lateThresholdMin, 0, 0);
+      rec.late = new Date(nowIso) > threshold;
+    }else if(type==='out'){
+      if(!rec || !rec.timeInAt){ setAttendanceStatus('لم يتم تسجيل حضورك اليوم بعد', 'err'); return; }
+      if(rec.timeOutAt){ setAttendanceStatus('تم تسجيل انصرافك مسبقاً اليوم', 'err'); return; }
+      rec.timeOutAt = nowIso;
+    }else if(type==='breakstart'){
+      if(!rec || !rec.timeInAt){ setAttendanceStatus('سجّل حضورك أولاً', 'err'); return; }
+      if(rec.breakOutAt){ setAttendanceStatus('تم تسجيل بدء الاستراحة مسبقاً', 'err'); return; }
+      rec.breakOutAt = nowIso;
+    }else if(type==='breakend'){
+      if(!rec || !rec.breakOutAt){ setAttendanceStatus('لم تبدأ استراحتك بعد', 'err'); return; }
+      if(rec.breakInAt){ setAttendanceStatus('تم تسجيل انتهاء الاستراحة مسبقاً', 'err'); return; }
+      rec.breakInAt = nowIso;
+    }
+    await saveAttendanceData();
+    renderAttendance(); renderOverview();
+    maybeCaptureSnapshot();
+    const labels = { in:'تسجيل حضورك', out:'تسجيل انصرافك', breakstart:'بدء استراحتك', breakend:'انتهاء استراحتك' };
+    document.getElementById('checkin-code').value = '';
+    setAttendanceStatus(`تم ${labels[type]} يا ${employee.name} — ${timeStr(nowIso)} ✓${rec.late && type==='in' ? ' (تأخير)' : ''}`, 'ok');
+  }, (err)=>{
+    setAttendanceStatus(geoErrorMessage(err), 'err');
+  }, { enableHighAccuracy:true, timeout:12000 });
+}
+
+function netHours(rec){
+  if(!rec.timeInAt || !rec.timeOutAt) return null;
+  let ms = new Date(rec.timeOutAt) - new Date(rec.timeInAt);
+  if(rec.breakOutAt && rec.breakInAt) ms -= (new Date(rec.breakInAt) - new Date(rec.breakOutAt));
+  return Math.max(0, ms / 3600000);
+}
+
+function renderAttendance(){
+  if(!adminUnlocked) return;
+  const q = (document.getElementById('search-attendance')?.value || '').trim();
+  const rows = [...attendance].sort((a,b)=> (b.date+(b.timeInAt||'')).localeCompare(a.date+(a.timeInAt||'')));
+  const filtered = rows.filter(a=> (employees.find(e=>e.id===a.employeeId)?.name||'').includes(q));
+  const body = document.getElementById('attendance-body'), empty = document.getElementById('attendance-empty');
+  if(!filtered.length){ body.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  body.innerHTML = filtered.map(a=>{
+    const name = employees.find(e=>e.id===a.employeeId)?.name || 'موظف محذوف';
+    const nh = netHours(a);
+    const breakTxt = (a.breakOutAt||a.breakInAt) ? `${timeStr(a.breakOutAt)||'—'} → ${timeStr(a.breakInAt)||'—'}` : '—';
+    return `<tr>
+      <td>${escapeHtml(name)}</td><td>${a.date}</td>
+      <td>${timeStr(a.timeInAt)||'—'}</td>
+      <td>${breakTxt}</td>
+      <td>${timeStr(a.timeOutAt)||'—'}</td>
+      <td>${nh!=null ? nh.toFixed(1)+' س' : '—'}</td>
+      <td>${a.late ? '<span class="pill warn">متأخر</span>' : (a.timeInAt?'<span class="pill active">حاضر</span>':'—')}</td>
+      <td>${a.distance!=null ? a.distance+' م' : '—'}</td>
+      <td><div class="row-actions">
+        <button class="icon-btn" onclick="openManualAttendanceModal('${a.id}')" title="تعديل"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+        <button class="icon-btn del" onclick="deleteAttendance('${a.id}')" title="حذف"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+async function deleteAttendance(id){
+  const ok = await confirmDialog('حذف هذا السجل؟');
+  if(!ok) return;
+  attendance = attendance.filter(a=>a.id!==id);
+  saveAttendanceData(); renderAttendance(); renderOverview();
+  logAudit('تم حذف سجل حضور');
+  showToast('تم حذف السجل');
+}
+
+/* ---------------- Manual attendance ---------------- */
+function openManualAttendanceModal(id){
+  const sel = document.getElementById('manual-att-employee');
+  sel.innerHTML = employees.map(e=>`<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
+  document.getElementById('manual-att-id').value = id || '';
+  const rec = id ? attendance.find(a=>a.id===id) : null;
+  if(rec){ sel.value = rec.employeeId; }
+  document.getElementById('manual-att-date').value = rec ? rec.date : localDateStr(new Date());
+  document.getElementById('manual-att-in').value = rec?.timeInAt ? new Date(rec.timeInAt).toTimeString().slice(0,5) : '';
+  document.getElementById('manual-att-out').value = rec?.timeOutAt ? new Date(rec.timeOutAt).toTimeString().slice(0,5) : '';
+  document.getElementById('manual-attendance-overlay').classList.add('show');
+}
+async function saveManualAttendance(){
+  const id = document.getElementById('manual-att-id').value;
+  const employeeId = document.getElementById('manual-att-employee').value;
+  const date = document.getElementById('manual-att-date').value;
+  const inTime = document.getElementById('manual-att-in').value;
+  const outTime = document.getElementById('manual-att-out').value;
+  if(!employeeId || !date){ showToast('أكمل البيانات المطلوبة'); return; }
+  const toIso = t => t ? new Date(date+'T'+t+':00').toISOString() : '';
+  let rec = id ? attendance.find(a=>a.id===id) : attendance.find(a=>a.employeeId===employeeId && a.date===date);
+  if(!rec){ rec = { id: uid(), employeeId, date, breakOutAt:'', breakInAt:'' }; attendance.push(rec); }
+  rec.employeeId = employeeId; rec.date = date;
+  rec.timeInAt = toIso(inTime); rec.timeOutAt = toIso(outTime);
+  rec.manual = true;
+  await saveAttendanceData();
+  closeModal('manual-attendance-overlay');
+  renderAttendance(); renderOverview();
+  logAudit(`تعديل يدوي لسجل حضور: ${employees.find(e=>e.id===employeeId)?.name||''} — ${date}`);
+  showToast('تم الحفظ');
+}
+
+/* ---------------- Leaves ---------------- */
+function openLeaveRequestModal(){
+  document.getElementById('leave-code').value='';
+  document.getElementById('leave-from').value='';
+  document.getElementById('leave-to').value='';
+  document.getElementById('leave-reason').value='';
+  document.getElementById('leave-request-status').textContent='';
+  document.getElementById('leave-request-overlay').classList.add('show');
+}
+async function submitLeaveRequest(){
+  const code = document.getElementById('leave-code').value.trim();
+  const employee = employees.find(e=>e.code===code);
+  const statusEl = document.getElementById('leave-request-status');
+  if(!employee){ statusEl.textContent='الرمز غير صحيح'; return; }
+  const from = document.getElementById('leave-from').value, to = document.getElementById('leave-to').value;
+  if(!from || !to){ statusEl.textContent='حدد تاريخ البداية والنهاية'; return; }
+  leaves.push({ id: uid(), employeeId: employee.id, type: document.getElementById('leave-type').value, from, to, reason: document.getElementById('leave-reason').value.trim(), status:'قيد الانتظار', requestedAt: new Date().toISOString() });
+  await saveLeaves();
+  closeModal('leave-request-overlay');
+  renderLeaves();
+  showToast('تم إرسال طلبك للمدير');
+}
+function setLeaveStatus(id, status){
+  const l = leaves.find(x=>x.id===id);
+  leaves = leaves.map(x=>x.id===id?{...x,status}:x);
+  saveLeaves(); renderLeaves();
+  logAudit(`تم ${status==='مقبول'?'قبول':'رفض'} طلب إجازة: ${employees.find(e=>e.id===l.employeeId)?.name||''}`);
+}
+function renderLeaves(){
+  if(!adminUnlocked) return;
+  const body = document.getElementById('leaves-body'), empty = document.getElementById('leaves-empty');
+  if(!leaves.length){ body.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  body.innerHTML = [...leaves].reverse().map(l=>{
+    const name = employees.find(e=>e.id===l.employeeId)?.name || 'موظف محذوف';
+    const pillClass = l.status==='مقبول' ? 'active' : (l.status==='مرفوض' ? 'paused' : 'warn');
+    return `<tr>
+      <td>${escapeHtml(name)}</td><td>${escapeHtml(l.type)}</td><td>${l.from}</td><td>${l.to}</td><td>${escapeHtml(l.reason)||'—'}</td>
+      <td><span class="pill ${pillClass}">${escapeHtml(l.status)}</span></td>
+      <td><div class="row-actions">
+        ${l.status==='قيد الانتظار' ? `<button class="icon-btn" onclick="setLeaveStatus('${l.id}','مقبول')" title="قبول"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12l5 5L20 7"/></svg></button>
+        <button class="icon-btn del" onclick="setLeaveStatus('${l.id}','مرفوض')" title="رفض"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg></button>` : ''}
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ---------------- Holidays ---------------- */
+function openHolidayModal(){
+  document.getElementById('holiday-date').value='';
+  document.getElementById('holiday-name').value='';
+  document.getElementById('holiday-overlay').classList.add('show');
+}
+async function saveHoliday(){
+  const date = document.getElementById('holiday-date').value, name = document.getElementById('holiday-name').value.trim();
+  if(!date || !name){ showToast('أكمل البيانات'); return; }
+  holidays.push({ id: uid(), date, name });
+  await saveHolidays();
+  closeModal('holiday-overlay');
+  renderHolidays();
+  logAudit(`تمت إضافة عطلة رسمية: ${name}`);
+  showToast('تم الحفظ');
+}
+function deleteHoliday(id){
+  confirmDialog('حذف هذه العطلة؟').then(ok=>{
+    if(!ok) return;
+    const h = holidays.find(x=>x.id===id);
+    holidays = holidays.filter(x=>x.id!==id);
+    saveHolidays(); renderHolidays();
+    logAudit(`تم حذف عطلة رسمية: ${h?.name||''}`);
+  });
+}
+function renderHolidays(){
+  if(!adminUnlocked) return;
+  const body = document.getElementById('holidays-body'), empty = document.getElementById('holidays-empty');
+  if(!holidays.length){ body.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  body.innerHTML = [...holidays].sort((a,b)=>a.date.localeCompare(b.date)).map(h=>`
+    <tr><td>${h.date}</td><td>${escapeHtml(h.name)}</td>
+    <td><div class="row-actions"><button class="icon-btn del" onclick="deleteHoliday('${h.id}')" title="حذف"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button></div></td></tr>`).join('');
+}
+
+/* ---------------- Personal record (public) ---------------- */
+function openMyRecordModal(){
+  document.getElementById('my-record-code').value='';
+  document.getElementById('my-record-results').innerHTML='';
+  document.getElementById('my-record-overlay').classList.add('show');
+}
+function loadMyRecord(){
+  const code = document.getElementById('my-record-code').value.trim();
+  const employee = employees.find(e=>e.code===code);
+  const box = document.getElementById('my-record-results');
+  if(!employee){ box.innerHTML = '<div class="status-msg err">الرمز غير صحيح</div>'; return; }
+  const mine = attendance.filter(a=>a.employeeId===employee.id).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,20);
+  if(!mine.length){ box.innerHTML = '<div class="empty-state">لا يوجد سجل حضور بعد</div>'; return; }
+  box.innerHTML = `<div style="max-height:280px; overflow-y:auto;">` + mine.map(a=>`
+    <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line); font-size:12.5px;">
+      <span>${a.date}</span>
+      <span style="color:var(--slate);">${timeStr(a.timeInAt)||'—'} → ${timeStr(a.timeOutAt)||'—'} ${a.late?'<span class="pill warn">تأخير</span>':''}</span>
+    </div>`).join('') + `</div>`;
+}
+
+/* ---------------- Overview / stats ---------------- */
+function renderOverview(){
+  if(!adminUnlocked) return;
+  const now = new Date();
+  const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const lastMonthDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
+  const lastMonthKey = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth()+1).padStart(2,'0')}`;
+
+  const activeEmployees = employees.filter(e=>e.status==='نشط');
+  document.getElementById('stat-active-employees').textContent = activeEmployees.length;
+
+  function monthStats(key){
+    const recs = attendance.filter(a=>a.date.startsWith(key) && a.timeInAt);
+    const workDaysSoFar = new Set(recs.map(a=>a.date)).size;
+    const expectedDays = activeEmployees.length * Math.max(1, workDaysSoFar);
+    const rate = expectedDays ? Math.round((recs.length / expectedDays) * 100) : 0;
+    const hoursArr = recs.map(netHours).filter(h=>h!=null);
+    const avgHours = hoursArr.length ? (hoursArr.reduce((a,b)=>a+b,0)/hoursArr.length) : 0;
+    const lateCount = recs.filter(a=>a.late).length;
+    return { rate: Math.min(100,rate), avgHours, lateCount };
+  }
+  const cur = monthStats(thisMonthKey), prev = monthStats(lastMonthKey);
+  document.getElementById('stat-attendance-rate').textContent = cur.rate + '%';
+  document.getElementById('stat-avg-hours').textContent = cur.avgHours.toFixed(1);
+  document.getElementById('stat-late-days').textContent = cur.lateCount;
+  const delta = cur.rate - prev.rate;
+  const deltaEl = document.getElementById('stat-attendance-delta');
+  deltaEl.textContent = delta===0 ? 'بدون تغيير عن الشهر السابق' : `${delta>0?'▲':'▼'} ${Math.abs(delta)}% عن الشهر السابق`;
+  deltaEl.className = 'delta ' + (delta>0?'up':(delta<0?'down':''));
+
+  const hourBuckets = {};
+  attendance.filter(a=>a.timeInAt).forEach(a=>{
+    const h = new Date(a.timeInAt).getHours();
+    hourBuckets[h] = (hourBuckets[h]||0)+1;
+  });
+  const maxCount = Math.max(1, ...Object.values(hourBuckets));
+  const hours = Object.keys(hourBuckets).map(Number).sort((a,b)=>a-b);
+  const heatWrap = document.getElementById('heatmap-wrap');
+  if(!hours.length){ heatWrap.innerHTML = '<div class="empty-state">لا توجد بيانات كافية بعد</div>'; }
+  else{
+    heatWrap.innerHTML = hours.map(h=>{
+      const count = hourBuckets[h];
+      const pct = Math.round((count/maxCount)*100);
+      return `<div class="heat-row"><span class="hlabel">${String(h).padStart(2,'0')}:00</span><div class="heat-bar-wrap"><div class="heat-bar" style="width:${pct}%"></div></div><span class="hcount">${count}</span></div>`;
+    }).join('');
+  }
+}
+
+/* ---------------- Audit log ---------------- */
+function renderAuditLog(){
+  if(!adminUnlocked) return;
+  const list = document.getElementById('audit-list');
+  if(!auditLog.length){ list.innerHTML = '<div class="empty-state">لا توجد عمليات مسجّلة بعد</div>'; return; }
+  list.innerHTML = auditLog.slice(0,50).map(a=>`<div class="audit-item">${escapeHtml(a.text)}<div class="t">${new Date(a.ts).toLocaleString('ar-SA')}</div></div>`).join('');
+}
+
+/* ---------------- Settings ---------------- */
+function fillSettingsForm(){
+  document.getElementById('setting-workstart').value = settings.workStart;
+  document.getElementById('setting-late').value = settings.lateThresholdMin;
+  document.getElementById('setting-code-expiry').value = settings.codeExpiryDays;
+  document.getElementById('setting-idle').value = settings.idleLockMin;
+  document.getElementById('setting-maxattempts').value = settings.maxAttempts;
+  document.getElementById('setting-lockout').value = settings.lockoutMin;
+  document.getElementById('setting-camera').checked = !!settings.cameraEnabled;
+}
+async function saveSettings(){
+  settings = {
+    workStart: document.getElementById('setting-workstart').value || '08:00',
+    lateThresholdMin: parseInt(document.getElementById('setting-late').value) || 0,
+    codeExpiryDays: parseInt(document.getElementById('setting-code-expiry').value) || 0,
+    idleLockMin: parseInt(document.getElementById('setting-idle').value) || 5,
+    maxAttempts: parseInt(document.getElementById('setting-maxattempts').value) || 5,
+    lockoutMin: parseInt(document.getElementById('setting-lockout').value) || 10,
+    cameraEnabled: document.getElementById('setting-camera').checked
+  };
+  await saveSettingsData();
+  logAudit('تم تحديث إعدادات النظام');
+  showToast('تم حفظ الإعدادات');
+  resetIdleTimer();
+}
+
+/* ---------------- CSV export ---------------- */
+function exportMonthlyCsv(){
+  const now = new Date();
+  const key = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const recs = attendance.filter(a=>a.date.startsWith(key));
+  let csv = 'الموظف,التاريخ,وقت الحضور,وقت الانصراف,صافي الساعات,متأخر\n';
+  recs.forEach(a=>{
+    const name = employees.find(e=>e.id===a.employeeId)?.name || '';
+    const nh = netHours(a);
+    csv += `${name},${a.date},${timeStr(a.timeInAt)},${timeStr(a.timeOutAt)},${nh!=null?nh.toFixed(2):''},${a.late?'نعم':'لا'}\n`;
+  });
+  const blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `تقرير-الحضور-${key}.csv`;
+  a.click();
+  logAudit(`تم تصدير تقرير CSV لشهر ${key}`);
+}
+
+/* ---------------- Backup ---------------- */
+function exportBackup(){
+  const data = { employees, attendance, branches, leaves, holidays, settings, exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `نسخة-احتياطية-${localDateStr(new Date())}.json`;
+  a.click();
+  logAudit('تم تصدير نسخة احتياطية كاملة');
+  showToast('تم تصدير النسخة الاحتياطية');
+}
+function importBackup(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try{
+      const data = JSON.parse(reader.result);
+      const ok = await confirmDialog('سيتم استبدال جميع البيانات الحالية بالنسخة المستوردة. متابعة؟');
+      if(!ok) return;
+      employees = data.employees || [];
+      attendance = data.attendance || [];
+      branches = data.branches && data.branches.length ? data.branches : branches;
+      leaves = data.leaves || [];
+      holidays = data.holidays || [];
+      if(data.settings) settings = Object.assign(settings, data.settings);
+      await Promise.all([saveEmployees(), saveAttendanceData(), saveBranches(), saveLeaves(), saveHolidays(), saveSettingsData()]);
+      renderAll(); fillSettingsForm();
+      logAudit('تم استيراد نسخة احتياطية');
+      showToast('تم استيراد النسخة بنجاح');
+    }catch(e){ showToast('ملف غير صالح'); }
+  };
+  reader.readAsText(file);
+  evt.target.value = '';
+}
+
+loadAll();
+</script>
+</body>
+</html>
