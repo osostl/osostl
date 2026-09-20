@@ -223,6 +223,7 @@
       </div>
       <button class="btn ghost small" style="width:100%; margin-top:4px;" onclick="openMyRecordModal()">عرض سجلي</button>
       <button class="btn ghost small" style="width:100%; margin-top:8px;" onclick="openLeaveRequestModal()">تقديم طلب إجازة/استئذان</button>
+      <button class="btn ghost small" style="width:100%; margin-top:8px;" onclick="openLeaveStatusModal()">متابعة طلب الاستئذان (خروج/عودة)</button>
       <div class="status-msg" id="attendance-status"></div>
       <div class="camera-preview" id="camera-preview"><img id="camera-preview-img" alt=""></div>
     </div>
@@ -254,6 +255,7 @@
         <div class="subtab" data-sub="staff">الموظفون</div>
         <div class="subtab" data-sub="log">سجل الحضور</div>
         <div class="subtab" data-sub="leaves">الإجازات والعطل</div>
+        <div class="subtab" data-sub="payroll">الرواتب</div>
         <div class="subtab" data-sub="branches">الفروع</div>
         <div class="subtab" data-sub="settings">الإعدادات والنظام</div>
       </div>
@@ -269,6 +271,10 @@
         <div class="panel">
           <h3>أوقات الحضور الأكثر شيوعاً</h3>
           <div id="heatmap-wrap"></div>
+        </div>
+        <div class="panel">
+          <h3>تنبيهات تحتاج متابعة</h3>
+          <div id="alerts-wrap"></div>
         </div>
       </div>
 
@@ -294,7 +300,7 @@
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>الاسم</th><th>الوظيفة</th><th>الفرع</th><th>الحالة</th><th>الرمز</th><th>الأجر/ساعة</th><th></th></tr></thead>
+              <thead><tr><th>الاسم</th><th>الوظيفة</th><th>الفرع</th><th>الحالة</th><th>الرمز</th><th>الأجر/ساعة</th><th>رصيد الإجازات</th><th></th></tr></thead>
               <tbody id="employees-body"></tbody>
             </table>
           </div>
@@ -367,6 +373,27 @@
         </div>
       </div>
 
+      <!-- ---- PAYROLL ---- -->
+      <div class="subview" id="sub-payroll">
+        <div class="panel">
+          <div class="toolbar">
+            <h3 style="margin:0;">الرواتب الشهرية</h3>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input type="month" id="payroll-month" style="background:var(--navy-deep); border:1px solid var(--line); color:var(--ivory); padding:8px 10px; border-radius:7px;" onchange="renderPayroll()">
+              <button class="btn small" onclick="exportPayrollCsv()">تصدير CSV</button>
+            </div>
+          </div>
+          <div class="hint">يُحتسب صافي الساعات لكل موظف خلال الشهر المحدد (بعد خصم الاستراحات والاستئذان والغداء التلقائي) × الأجر بالساعة.</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>الموظف</th><th>أيام الحضور</th><th>مرات التأخير</th><th>صافي الساعات</th><th>الأجر/ساعة</th><th>إجمالي الراتب التقديري</th></tr></thead>
+              <tbody id="payroll-body"></tbody>
+            </table>
+          </div>
+          <div id="payroll-empty" class="empty-state" style="display:none;">لا يوجد موظفون بعد</div>
+        </div>
+      </div>
+
       <!-- ---- BRANCHES ---- -->
       <div class="subview" id="sub-branches">
         <div class="panel">
@@ -397,7 +424,32 @@
             <div class="field"><label>مدة القفل المؤقت (دقيقة)</label><input type="number" id="setting-lockout" min="1"></div>
           </div>
           <div class="field">
-            <label><input type="checkbox" id="setting-camera" style="width:auto; margin-left:6px;">تفعيل صورة تأكيد لحظية عند تسجيل الحضور (لا تُحفظ)</label>
+            <label><input type="checkbox" id="setting-camera" style="width:auto; margin-left:6px;">التقاط وحفظ صورة تلقائية عند كل تسجيل حضور/انصراف/استراحة</label>
+          </div>
+          <button class="btn" onclick="saveSettings()">حفظ الإعدادات</button>
+        </div>
+
+        <div class="panel">
+          <h3>استراحة الغداء التلقائية</h3>
+          <div class="hint">إذا تجاوزت مدة دوام الموظف الفعلية الحد المحدد، يُخصم وقت الغداء تلقائياً من صافي ساعاته دون الحاجة لتسجيل استراحة يدوية.</div>
+          <div class="field">
+            <label><input type="checkbox" id="setting-lunch-enabled" style="width:auto; margin-left:6px;">تفعيل استراحة الغداء التلقائية</label>
+          </div>
+          <div class="three-col">
+            <div class="field"><label>من الساعة</label><input type="time" id="setting-lunch-start"></div>
+            <div class="field"><label>إلى الساعة</label><input type="time" id="setting-lunch-end"></div>
+            <div class="field"><label>تُطبّق إذا تجاوز الدوام (ساعة)</label><input type="number" id="setting-lunch-threshold" min="1" step="0.5"></div>
+          </div>
+          <button class="btn" onclick="saveSettings()">حفظ الإعدادات</button>
+        </div>
+
+        <div class="panel">
+          <h3>تنبيهات المتابعة</h3>
+          <div class="hint">تظهر هذه التنبيهات تلقائياً في تبويب "نظرة عامة" لمساعدتك على المتابعة.</div>
+          <div class="three-col">
+            <div class="field"><label>تنبيه عند تكرار التأخير (مرات/شهر)</label><input type="number" id="setting-late-alert" min="1"></div>
+            <div class="field"><label>تنبيه قبل انتهاء العقد بـ (يوم)</label><input type="number" id="setting-contract-alert" min="1"></div>
+            <div class="field"><label>رصيد الإجازات الافتراضي للموظف الجديد (يوم)</label><input type="number" id="setting-default-leave" min="0"></div>
           </div>
           <button class="btn" onclick="saveSettings()">حفظ الإعدادات</button>
         </div>
@@ -438,11 +490,28 @@
     <div class="field"><label>الفرع</label><select id="employee-branch"></select></div>
     <div class="field"><label>الأجر بالساعة (اختياري)</label><input type="number" id="employee-wage" min="0" step="0.5"></div>
   </div>
+  <div class="two-col">
+    <div class="field"><label>رصيد الإجازات السنوي (يوم)</label><input type="number" id="employee-leave-balance" min="0"></div>
+    <div class="field"><label>تاريخ انتهاء العقد (اختياري)</label><input type="date" id="employee-contract-end"></div>
+  </div>
   <div class="field">
     <label>أيام وساعات الدوام (لكل يوم وقته الخاص)</label>
     <div id="employee-days-editor"></div>
   </div>
   <div class="modal-actions"><button class="btn ghost" onclick="closeModal('employee-overlay')">إلغاء</button><button class="btn" onclick="saveEmployee()">حفظ</button></div>
+</div></div>
+
+<div class="overlay" id="violations-overlay"><div class="modal">
+  <h3>المخالفات والإنذارات — <span id="violations-emp-name"></span></h3>
+  <input type="hidden" id="violations-emp-id">
+  <div class="two-col">
+    <div class="field"><label>التاريخ</label><input type="date" id="violation-date"></div>
+    <div class="field"><label>النوع</label><select id="violation-type"><option value="ملاحظة">ملاحظة</option><option value="تنبيه">تنبيه</option><option value="إنذار أول">إنذار أول</option><option value="إنذار ثاني">إنذار ثاني</option><option value="إنذار نهائي">إنذار نهائي</option></select></div>
+  </div>
+  <div class="field"><label>السبب</label><textarea id="violation-reason" rows="2"></textarea></div>
+  <button class="btn" style="width:100%; margin-bottom:14px;" onclick="addViolation()">إضافة</button>
+  <div id="violations-list"></div>
+  <div class="modal-actions"><button class="btn ghost" style="width:100%;" onclick="closeModal('violations-overlay')">إغلاق</button></div>
 </div></div>
 
 <div class="overlay" id="password-overlay"><div class="modal">
@@ -488,14 +557,28 @@
 <div class="overlay" id="leave-request-overlay"><div class="modal">
   <h3>تقديم طلب إجازة/استئذان</h3>
   <div class="field"><label>رمزك السري</label><input type="password" id="leave-code" inputmode="numeric" maxlength="6"></div>
-  <div class="field"><label>النوع</label><select id="leave-type"><option value="إجازة">إجازة</option><option value="استئذان">استئذان</option></select></div>
-  <div class="two-col">
+  <div class="field"><label>النوع</label><select id="leave-type" onchange="onLeaveTypeChange()"><option value="إجازة">إجازة</option><option value="استئذان">استئذان (بالأيام)</option><option value="استئذان خروج مؤقت">استئذان خروج مؤقت (اليوم — بموافقة فورية)</option></select></div>
+  <div class="two-col" id="leave-dates-row">
     <div class="field"><label>من تاريخ</label><input type="date" id="leave-from"></div>
     <div class="field"><label>إلى تاريخ</label><input type="date" id="leave-to"></div>
   </div>
+  <div class="hint" id="leave-temp-hint" style="display:none;">سيُسجَّل الطلب لليوم الحالي. بعد موافقة المدير، اضغط "متابعة طلب الاستئذان" بالصفحة الرئيسية لتسجيل خروجك وعودتك.</div>
   <div class="field"><label>السبب (اختياري)</label><textarea id="leave-reason" rows="2"></textarea></div>
   <div class="status-msg err" id="leave-request-status"></div>
   <div class="modal-actions"><button class="btn ghost" onclick="closeModal('leave-request-overlay')">إلغاء</button><button class="btn" onclick="submitLeaveRequest()">إرسال الطلب</button></div>
+</div></div>
+
+<div class="overlay" id="leave-status-overlay"><div class="modal">
+  <h3>متابعة طلب الاستئذان</h3>
+  <div class="field"><label>رمزك السري</label><input type="password" id="leave-status-code" inputmode="numeric" maxlength="6"></div>
+  <button class="btn" style="width:100%;" onclick="checkLeaveStatus()">تحقق من الحالة</button>
+  <div id="leave-status-results" style="margin-top:14px;"></div>
+</div></div>
+
+<div class="overlay" id="photos-overlay"><div class="modal">
+  <h3>صور تسجيل الحضور</h3>
+  <div id="photos-body"></div>
+  <div class="modal-actions"><button class="btn ghost" style="width:100%;" onclick="closeModal('photos-overlay')">إغلاق</button></div>
 </div></div>
 
 <div class="overlay" id="my-record-overlay"><div class="modal">
@@ -534,7 +617,7 @@
 
 <script>
 let employees = [], attendance = [], branches = [], leaves = [], holidays = [], auditLog = [];
-let settings = { workStart:'08:00', lateThresholdMin:15, codeExpiryDays:90, idleLockMin:5, maxAttempts:5, lockoutMin:10, cameraEnabled:false };
+let settings = { workStart:'08:00', lateThresholdMin:15, codeExpiryDays:90, idleLockMin:5, maxAttempts:5, lockoutMin:10, cameraEnabled:false, lunchAutoEnabled:true, lunchStart:'12:00', lunchEnd:'13:00', lunchThresholdHours:8, lateAlertThreshold:3, contractAlertDays:30, defaultLeaveBalance:30 };
 let adminPassword = null, adminUnlocked = false;
 let failedAttempts = 0, lockoutUntil = 0;
 let idleTimer = null;
@@ -552,6 +635,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const FS_COLLECTION = 'institute-data';
+const PHOTOS_COLLECTION = 'institute-photos';
 
 async function fsGet(key){
   const doc = await db.collection(FS_COLLECTION).doc(key).get();
@@ -559,6 +643,14 @@ async function fsGet(key){
 }
 async function fsSet(key, value){
   await db.collection(FS_COLLECTION).doc(key).set({ value, updatedAt: new Date().toISOString() });
+}
+async function savePhotoDoc(record){
+  const id = uid();
+  await db.collection(PHOTOS_COLLECTION).doc(id).set(record);
+  return id;
+}
+async function getPhotoDoc(id){
+  try{ const doc = await db.collection(PHOTOS_COLLECTION).doc(id).get(); return doc.exists ? doc.data() : null; }catch(e){ return null; }
 }
 /* ====================================================== */
 
@@ -630,6 +722,7 @@ document.querySelectorAll('.subtab').forEach(item=>{
     document.querySelectorAll('.subview').forEach(v=>v.classList.remove('active'));
     document.getElementById('sub-'+item.dataset.sub).classList.add('active');
     if(item.dataset.sub==='overview') renderOverview();
+    if(item.dataset.sub==='payroll') renderPayroll();
   });
 });
 document.getElementById('admin-content').addEventListener('click', resetIdleTimer);
@@ -844,6 +937,8 @@ function openEmployeeModal(id){
   document.getElementById('employee-position').value = e ? e.position : '';
   document.getElementById('employee-status').value = e ? e.status : 'نشط';
   document.getElementById('employee-wage').value = e ? (e.wage||'') : '';
+  document.getElementById('employee-leave-balance').value = e ? (e.leaveBalanceDays ?? settings.defaultLeaveBalance) : settings.defaultLeaveBalance;
+  document.getElementById('employee-contract-end').value = e ? (e.contractEndDate||'') : '';
   fillBranchSelect(document.getElementById('employee-branch'), e ? e.branchId : branches[0].id);
   buildDaysEditor(e?.schedule?.days);
   document.getElementById('employee-overlay').classList.add('show');
@@ -860,6 +955,9 @@ async function saveEmployee(){
     status: document.getElementById('employee-status').value,
     branchId: document.getElementById('employee-branch').value,
     wage: parseFloat(document.getElementById('employee-wage').value) || 0,
+    leaveBalanceDays: parseInt(document.getElementById('employee-leave-balance').value) || 0,
+    contractEndDate: document.getElementById('employee-contract-end').value || '',
+    violations: existing ? (existing.violations||[]) : [],
     schedule: { days },
     code: existing ? existing.code : genCode(),
     codeCreatedAt: existing ? existing.codeCreatedAt : new Date().toISOString()
@@ -881,6 +979,59 @@ async function deleteEmployee(id){
   renderAll();
   logAudit(`تم حذف الموظف: ${e?.name||''}`);
   showToast('تم حذف الموظف');
+}
+
+/* ---------------- Violations ---------------- */
+function openViolationsModal(id){
+  const e = employees.find(x=>x.id===id);
+  if(!e) return;
+  document.getElementById('violations-emp-id').value = id;
+  document.getElementById('violations-emp-name').textContent = e.name;
+  document.getElementById('violation-date').value = localDateStr(new Date());
+  document.getElementById('violation-type').value = 'ملاحظة';
+  document.getElementById('violation-reason').value = '';
+  renderViolationsList();
+  document.getElementById('violations-overlay').classList.add('show');
+}
+function renderViolationsList(){
+  const id = document.getElementById('violations-emp-id').value;
+  const e = employees.find(x=>x.id===id);
+  const list = document.getElementById('violations-list');
+  const items = e?.violations || [];
+  if(!items.length){ list.innerHTML = '<div class="empty-state">لا توجد مخالفات مسجّلة</div>'; return; }
+  list.innerHTML = [...items].reverse().map(v=>`
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); font-size:12.5px;">
+      <div><span class="pill warn">${escapeHtml(v.type)}</span> <span style="color:var(--slate);">${v.date}</span><div style="margin-top:4px;">${escapeHtml(v.reason)||''}</div></div>
+      <button class="icon-btn del" onclick="deleteViolation('${v.id}')" title="حذف"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>`).join('');
+}
+async function addViolation(){
+  const id = document.getElementById('violations-emp-id').value;
+  const date = document.getElementById('violation-date').value;
+  const type = document.getElementById('violation-type').value;
+  const reason = document.getElementById('violation-reason').value.trim();
+  if(!date){ showToast('حدد التاريخ'); return; }
+  const e = employees.find(x=>x.id===id);
+  if(!e) return;
+  e.violations = e.violations || [];
+  e.violations.push({ id: uid(), date, type, reason });
+  await saveEmployees();
+  document.getElementById('violation-reason').value = '';
+  renderViolationsList();
+  renderEmployees();
+  logAudit(`تسجيل ${type} للموظف: ${e.name}`);
+  showToast('تم الحفظ');
+}
+async function deleteViolation(vid){
+  const id = document.getElementById('violations-emp-id').value;
+  const e = employees.find(x=>x.id===id);
+  if(!e) return;
+  const ok = await confirmDialog('حذف هذه المخالفة؟');
+  if(!ok) return;
+  e.violations = (e.violations||[]).filter(v=>v.id!==vid);
+  await saveEmployees();
+  renderViolationsList();
+  renderEmployees();
 }
 async function regenerateCode(id){
   const ok = await confirmDialog('توليد رمز جديد لهذا الموظف؟ الرمز القديم لن يعمل بعدها.');
@@ -915,7 +1066,9 @@ function renderEmployees(){
       <td><span class="pill ${pillClass}">${escapeHtml(e.status)}</span></td>
       <td class="code-cell">${escapeHtml(e.code)} ${expired?'<span class="pill warn">منتهي</span>':''}</td>
       <td>${e.wage ? e.wage+' ر.س' : '—'}</td>
+      <td>${e.leaveBalanceDays!=null ? e.leaveBalanceDays+' يوم' : '—'}</td>
       <td><div class="row-actions">
+        <button class="icon-btn" onclick="openViolationsModal('${e.id}')" title="المخالفات والإنذارات">${e.violations && e.violations.length ? `⚠️ ${e.violations.length}` : '⚠️'}</button>
         <button class="icon-btn" onclick="regenerateCode('${e.id}')" title="توليد رمز جديد"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 11-2.6-6.4M21 4v5h-5"/></svg></button>
         <button class="icon-btn" onclick="openEmployeeCard('${e.id}')" title="بطاقة QR للطباعة"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM19 14h2v2h-2zM14 19h2v2h-2zM19 19h2v2h-2z"/></svg></button>
         <button class="icon-btn" onclick="openEmployeeModal('${e.id}')" title="تعديل"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
@@ -983,490 +1136,4 @@ function importEmployeesCsv(evt){
       await saveEmployees();
       renderAll();
       logAudit(`تم استيراد ${added} موظف عبر CSV`);
-      showToast(`تم استيراد ${added} موظف بنجاح`);
-    }catch(e){ showToast('تعذّر قراءة الملف — تأكد من الصيغة'); }
-  };
-  reader.readAsText(file);
-  evt.target.value = '';
-}
-
-/* ---------------- QR: employee printable card ---------------- */
-function openEmployeeCard(id){
-  const e = employees.find(x=>x.id===id);
-  if(!e) return;
-  document.getElementById('card-name').textContent = e.name;
-  document.getElementById('card-position').textContent = e.position || '';
-  document.getElementById('card-code').textContent = e.code;
-  const qrWrap = document.getElementById('employee-card-qr');
-  qrWrap.innerHTML = '';
-  new QRCode(qrWrap, { text: e.code, width:160, height:160, colorDark:'#0E1A2B', colorLight:'#F3EEE1' });
-  document.getElementById('employee-card-overlay').classList.add('show');
-}
-function printEmployeeCard(){ window.print(); }
-
-/* ---------------- QR scanning for check-in ---------------- */
-let qrStream = null, qrScanning = false;
-function openQrScan(){
-  document.getElementById('qr-scan-overlay').classList.add('show');
-  const video = document.getElementById('qr-video');
-  navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } }).then(stream=>{
-    qrStream = stream;
-    video.srcObject = stream;
-    video.play();
-    qrScanning = true;
-    requestAnimationFrame(scanQrFrame);
-  }).catch(()=>{
-    document.getElementById('qr-scan-status').textContent = 'تعذّر الوصول للكاميرا — تأكد من الإذن';
-  });
-}
-function closeQrScan(){
-  qrScanning = false;
-  if(qrStream){ qrStream.getTracks().forEach(t=>t.stop()); qrStream = null; }
-  document.getElementById('qr-scan-overlay').classList.remove('show');
-}
-function scanQrFrame(){
-  if(!qrScanning) return;
-  const video = document.getElementById('qr-video');
-  if(video.readyState === video.HAVE_ENOUGH_DATA){
-    const canvas = document.getElementById('qr-canvas');
-    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(imgData.data, imgData.width, imgData.height);
-    if(code && code.data){
-      document.getElementById('checkin-code').value = code.data.trim();
-      closeQrScan();
-      showToast('تم مسح الرمز بنجاح');
-      return;
-    }
-  }
-  requestAnimationFrame(scanQrFrame);
-}
-function setAttendanceStatus(msg, kind){ const el=document.getElementById('attendance-status'); el.textContent=msg; el.className='status-msg'+(kind?' '+kind:''); }
-function setLocationStatus(msg, kind){ const el=document.getElementById('location-status'); el.textContent=msg; el.className='status-msg'+(kind?' '+kind:''); }
-
-function geoErrorMessage(err){
-  if(err && err.code === 1) return 'تم رفض إذن الموقع — إذا كنت تفتح الصفحة من داخل تطبيق آخر (مثل تطبيق Claude) افتحها من Safari أو Chrome مباشرة، وتأكد من تفعيل خدمة الموقع لهذا المتصفح من إعدادات الجهاز';
-  if(err && err.code === 2) return 'تعذّر تحديد موقعك حالياً — تأكد من تفعيل GPS وحاول مرة أخرى';
-  if(err && err.code === 3) return 'استغرق تحديد الموقع وقتاً طويلاً — حاول مرة أخرى في مكان مفتوح';
-  return 'تعذّر الحصول على موقعك';
-}
-
-let locationGranted = false;
-function enableLocation(){
-  if(!navigator.geolocation){ setLocationStatus('هذا المتصفح لا يدعم تحديد الموقع الجغرافي إطلاقاً', 'err'); return; }
-  setLocationStatus('جارِ طلب إذن الموقع…', '');
-  navigator.geolocation.getCurrentPosition((pos)=>{
-    locationGranted = true;
-    setLocationStatus(`تم تفعيل الموقع بنجاح ✓ (دقة القراءة: ±${Math.round(pos.coords.accuracy)} م)`, 'ok');
-  }, (err)=>{
-    locationGranted = false;
-    setLocationStatus(geoErrorMessage(err), 'err');
-  }, { enableHighAccuracy:true, timeout:12000 });
-}
-
-function findMatchingBranch(lat, lng, employee){
-  const candidates = employee.branchId ? branches.filter(b=>b.id===employee.branchId) : branches;
-  let best = null, bestDist = Infinity;
-  candidates.forEach(b=>{
-    const d = distanceMeters(lat,lng,b.lat,b.lng);
-    if(d < bestDist){ bestDist = d; best = b; }
-  });
-  return { branch: best, dist: bestDist, within: best && bestDist <= best.radius };
-}
-
-async function maybeCaptureSnapshot(){
-  if(!settings.cameraEnabled || !navigator.mediaDevices?.getUserMedia) return;
-  try{
-    const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user' } });
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    await video.play();
-    await new Promise(r=>setTimeout(r,400));
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video,0,0);
-    const dataUrl = canvas.toDataURL('image/jpeg', .7);
-    stream.getTracks().forEach(t=>t.stop());
-    const wrap = document.getElementById('camera-preview'), img = document.getElementById('camera-preview-img');
-    img.src = dataUrl; wrap.style.display = 'block';
-    setTimeout(()=>{ wrap.style.display='none'; img.src=''; }, 3000);
-  }catch(e){ /* camera unavailable or denied — silently skip, not a blocker */ }
-}
-
-function checkAttendance(type, retryAccuracy){
-  const code = document.getElementById('checkin-code').value.trim();
-  if(!code){ setAttendanceStatus('الرجاء إدخال رمزك السري', 'err'); return; }
-  const employee = employees.find(e=>e.code===code);
-  if(!employee){ setAttendanceStatus('الرمز غير صحيح', 'err'); return; }
-  if(isCodeExpired(employee)){ setAttendanceStatus('انتهت صلاحية رمزك — تواصل مع المدير لتجديده', 'err'); return; }
-  if(!navigator.geolocation){ setAttendanceStatus('المتصفح لا يدعم تحديد الموقع الجغرافي', 'err'); return; }
-  setAttendanceStatus('جارِ تحديد موقعك…', '');
-  navigator.geolocation.getCurrentPosition(async (pos)=>{
-    const { latitude, longitude, accuracy } = pos.coords;
-    if(accuracy > 30 && !retryAccuracy){
-      setAttendanceStatus(`دقة تحديد موقعك ضعيفة (±${Math.round(accuracy)} م) — جارِ إعادة المحاولة تلقائياً…`, 'warn');
-      setTimeout(()=>checkAttendance(type, true), 1500);
-      return;
-    }
-    const match = findMatchingBranch(latitude, longitude, employee);
-    if(!match.within){
-      setAttendanceStatus(`أنت خارج نطاق ${match.branch?escapeHtml(match.branch.name):'المعهد'} — المسافة الحالية: ${Math.round(match.dist)} م`, 'err');
-      return;
-    }
-    const today = localDateStr(new Date());
-    const nowIso = new Date().toISOString();
-    let rec = attendance.find(a => a.employeeId===employee.id && a.date===today);
-    if(type==='in'){
-      if(rec && rec.timeInAt){ setAttendanceStatus('تم تسجيل حضورك مسبقاً اليوم', 'err'); return; }
-      if(!rec){ rec = { id: uid(), employeeId: employee.id, date: today, timeInAt:'', breakOutAt:'', breakInAt:'', timeOutAt:'', distance: Math.round(match.dist) }; attendance.push(rec); }
-      rec.timeInAt = nowIso; rec.distance = Math.round(match.dist);
-      const dow = new Date(nowIso).getDay();
-      const daySched = employee.schedule?.days?.[dow];
-      const startStr = daySched ? daySched.start : settings.workStart;
-      const [h,m] = startStr.split(':').map(Number);
-      const threshold = new Date(nowIso); threshold.setHours(h, m + settings.lateThresholdMin, 0, 0);
-      rec.late = new Date(nowIso) > threshold;
-    }else if(type==='out'){
-      if(!rec || !rec.timeInAt){ setAttendanceStatus('لم يتم تسجيل حضورك اليوم بعد', 'err'); return; }
-      if(rec.timeOutAt){ setAttendanceStatus('تم تسجيل انصرافك مسبقاً اليوم', 'err'); return; }
-      rec.timeOutAt = nowIso;
-    }else if(type==='breakstart'){
-      if(!rec || !rec.timeInAt){ setAttendanceStatus('سجّل حضورك أولاً', 'err'); return; }
-      if(rec.breakOutAt){ setAttendanceStatus('تم تسجيل بدء الاستراحة مسبقاً', 'err'); return; }
-      rec.breakOutAt = nowIso;
-    }else if(type==='breakend'){
-      if(!rec || !rec.breakOutAt){ setAttendanceStatus('لم تبدأ استراحتك بعد', 'err'); return; }
-      if(rec.breakInAt){ setAttendanceStatus('تم تسجيل انتهاء الاستراحة مسبقاً', 'err'); return; }
-      rec.breakInAt = nowIso;
-    }
-    await saveAttendanceData();
-    renderAttendance(); renderOverview();
-    maybeCaptureSnapshot();
-    const labels = { in:'تسجيل حضورك', out:'تسجيل انصرافك', breakstart:'بدء استراحتك', breakend:'انتهاء استراحتك' };
-    document.getElementById('checkin-code').value = '';
-    setAttendanceStatus(`تم ${labels[type]} يا ${employee.name} — ${timeStr(nowIso)} ✓${rec.late && type==='in' ? ' (تأخير)' : ''}`, 'ok');
-  }, (err)=>{
-    setAttendanceStatus(geoErrorMessage(err), 'err');
-  }, { enableHighAccuracy:true, timeout:12000 });
-}
-
-function netHours(rec){
-  if(!rec.timeInAt || !rec.timeOutAt) return null;
-  let ms = new Date(rec.timeOutAt) - new Date(rec.timeInAt);
-  if(rec.breakOutAt && rec.breakInAt) ms -= (new Date(rec.breakInAt) - new Date(rec.breakOutAt));
-  return Math.max(0, ms / 3600000);
-}
-
-function renderAttendance(){
-  if(!adminUnlocked) return;
-  const q = (document.getElementById('search-attendance')?.value || '').trim();
-  const rows = [...attendance].sort((a,b)=> (b.date+(b.timeInAt||'')).localeCompare(a.date+(a.timeInAt||'')));
-  const filtered = rows.filter(a=> (employees.find(e=>e.id===a.employeeId)?.name||'').includes(q));
-  const body = document.getElementById('attendance-body'), empty = document.getElementById('attendance-empty');
-  if(!filtered.length){ body.innerHTML=''; empty.style.display='block'; return; }
-  empty.style.display='none';
-  body.innerHTML = filtered.map(a=>{
-    const name = employees.find(e=>e.id===a.employeeId)?.name || 'موظف محذوف';
-    const nh = netHours(a);
-    const breakTxt = (a.breakOutAt||a.breakInAt) ? `${timeStr(a.breakOutAt)||'—'} → ${timeStr(a.breakInAt)||'—'}` : '—';
-    return `<tr>
-      <td>${escapeHtml(name)}</td><td>${a.date}</td>
-      <td>${timeStr(a.timeInAt)||'—'}</td>
-      <td>${breakTxt}</td>
-      <td>${timeStr(a.timeOutAt)||'—'}</td>
-      <td>${nh!=null ? nh.toFixed(1)+' س' : '—'}</td>
-      <td>${a.late ? '<span class="pill warn">متأخر</span>' : (a.timeInAt?'<span class="pill active">حاضر</span>':'—')}</td>
-      <td>${a.distance!=null ? a.distance+' م' : '—'}</td>
-      <td><div class="row-actions">
-        <button class="icon-btn" onclick="openManualAttendanceModal('${a.id}')" title="تعديل"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
-        <button class="icon-btn del" onclick="deleteAttendance('${a.id}')" title="حذف"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
-      </div></td>
-    </tr>`;
-  }).join('');
-}
-async function deleteAttendance(id){
-  const ok = await confirmDialog('حذف هذا السجل؟');
-  if(!ok) return;
-  attendance = attendance.filter(a=>a.id!==id);
-  saveAttendanceData(); renderAttendance(); renderOverview();
-  logAudit('تم حذف سجل حضور');
-  showToast('تم حذف السجل');
-}
-
-/* ---------------- Manual attendance ---------------- */
-function openManualAttendanceModal(id){
-  const sel = document.getElementById('manual-att-employee');
-  sel.innerHTML = employees.map(e=>`<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
-  document.getElementById('manual-att-id').value = id || '';
-  const rec = id ? attendance.find(a=>a.id===id) : null;
-  if(rec){ sel.value = rec.employeeId; }
-  document.getElementById('manual-att-date').value = rec ? rec.date : localDateStr(new Date());
-  document.getElementById('manual-att-in').value = rec?.timeInAt ? new Date(rec.timeInAt).toTimeString().slice(0,5) : '';
-  document.getElementById('manual-att-out').value = rec?.timeOutAt ? new Date(rec.timeOutAt).toTimeString().slice(0,5) : '';
-  document.getElementById('manual-attendance-overlay').classList.add('show');
-}
-async function saveManualAttendance(){
-  const id = document.getElementById('manual-att-id').value;
-  const employeeId = document.getElementById('manual-att-employee').value;
-  const date = document.getElementById('manual-att-date').value;
-  const inTime = document.getElementById('manual-att-in').value;
-  const outTime = document.getElementById('manual-att-out').value;
-  if(!employeeId || !date){ showToast('أكمل البيانات المطلوبة'); return; }
-  const toIso = t => t ? new Date(date+'T'+t+':00').toISOString() : '';
-  let rec = id ? attendance.find(a=>a.id===id) : attendance.find(a=>a.employeeId===employeeId && a.date===date);
-  if(!rec){ rec = { id: uid(), employeeId, date, breakOutAt:'', breakInAt:'' }; attendance.push(rec); }
-  rec.employeeId = employeeId; rec.date = date;
-  rec.timeInAt = toIso(inTime); rec.timeOutAt = toIso(outTime);
-  rec.manual = true;
-  await saveAttendanceData();
-  closeModal('manual-attendance-overlay');
-  renderAttendance(); renderOverview();
-  logAudit(`تعديل يدوي لسجل حضور: ${employees.find(e=>e.id===employeeId)?.name||''} — ${date}`);
-  showToast('تم الحفظ');
-}
-
-/* ---------------- Leaves ---------------- */
-function openLeaveRequestModal(){
-  document.getElementById('leave-code').value='';
-  document.getElementById('leave-from').value='';
-  document.getElementById('leave-to').value='';
-  document.getElementById('leave-reason').value='';
-  document.getElementById('leave-request-status').textContent='';
-  document.getElementById('leave-request-overlay').classList.add('show');
-}
-async function submitLeaveRequest(){
-  const code = document.getElementById('leave-code').value.trim();
-  const employee = employees.find(e=>e.code===code);
-  const statusEl = document.getElementById('leave-request-status');
-  if(!employee){ statusEl.textContent='الرمز غير صحيح'; return; }
-  const from = document.getElementById('leave-from').value, to = document.getElementById('leave-to').value;
-  if(!from || !to){ statusEl.textContent='حدد تاريخ البداية والنهاية'; return; }
-  leaves.push({ id: uid(), employeeId: employee.id, type: document.getElementById('leave-type').value, from, to, reason: document.getElementById('leave-reason').value.trim(), status:'قيد الانتظار', requestedAt: new Date().toISOString() });
-  await saveLeaves();
-  closeModal('leave-request-overlay');
-  renderLeaves();
-  showToast('تم إرسال طلبك للمدير');
-}
-function setLeaveStatus(id, status){
-  const l = leaves.find(x=>x.id===id);
-  leaves = leaves.map(x=>x.id===id?{...x,status}:x);
-  saveLeaves(); renderLeaves();
-  logAudit(`تم ${status==='مقبول'?'قبول':'رفض'} طلب إجازة: ${employees.find(e=>e.id===l.employeeId)?.name||''}`);
-}
-function renderLeaves(){
-  if(!adminUnlocked) return;
-  const body = document.getElementById('leaves-body'), empty = document.getElementById('leaves-empty');
-  if(!leaves.length){ body.innerHTML=''; empty.style.display='block'; return; }
-  empty.style.display='none';
-  body.innerHTML = [...leaves].reverse().map(l=>{
-    const name = employees.find(e=>e.id===l.employeeId)?.name || 'موظف محذوف';
-    const pillClass = l.status==='مقبول' ? 'active' : (l.status==='مرفوض' ? 'paused' : 'warn');
-    return `<tr>
-      <td>${escapeHtml(name)}</td><td>${escapeHtml(l.type)}</td><td>${l.from}</td><td>${l.to}</td><td>${escapeHtml(l.reason)||'—'}</td>
-      <td><span class="pill ${pillClass}">${escapeHtml(l.status)}</span></td>
-      <td><div class="row-actions">
-        ${l.status==='قيد الانتظار' ? `<button class="icon-btn" onclick="setLeaveStatus('${l.id}','مقبول')" title="قبول"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12l5 5L20 7"/></svg></button>
-        <button class="icon-btn del" onclick="setLeaveStatus('${l.id}','مرفوض')" title="رفض"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg></button>` : ''}
-      </div></td>
-    </tr>`;
-  }).join('');
-}
-
-/* ---------------- Holidays ---------------- */
-function openHolidayModal(){
-  document.getElementById('holiday-date').value='';
-  document.getElementById('holiday-name').value='';
-  document.getElementById('holiday-overlay').classList.add('show');
-}
-async function saveHoliday(){
-  const date = document.getElementById('holiday-date').value, name = document.getElementById('holiday-name').value.trim();
-  if(!date || !name){ showToast('أكمل البيانات'); return; }
-  holidays.push({ id: uid(), date, name });
-  await saveHolidays();
-  closeModal('holiday-overlay');
-  renderHolidays();
-  logAudit(`تمت إضافة عطلة رسمية: ${name}`);
-  showToast('تم الحفظ');
-}
-function deleteHoliday(id){
-  confirmDialog('حذف هذه العطلة؟').then(ok=>{
-    if(!ok) return;
-    const h = holidays.find(x=>x.id===id);
-    holidays = holidays.filter(x=>x.id!==id);
-    saveHolidays(); renderHolidays();
-    logAudit(`تم حذف عطلة رسمية: ${h?.name||''}`);
-  });
-}
-function renderHolidays(){
-  if(!adminUnlocked) return;
-  const body = document.getElementById('holidays-body'), empty = document.getElementById('holidays-empty');
-  if(!holidays.length){ body.innerHTML=''; empty.style.display='block'; return; }
-  empty.style.display='none';
-  body.innerHTML = [...holidays].sort((a,b)=>a.date.localeCompare(b.date)).map(h=>`
-    <tr><td>${h.date}</td><td>${escapeHtml(h.name)}</td>
-    <td><div class="row-actions"><button class="icon-btn del" onclick="deleteHoliday('${h.id}')" title="حذف"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button></div></td></tr>`).join('');
-}
-
-/* ---------------- Personal record (public) ---------------- */
-function openMyRecordModal(){
-  document.getElementById('my-record-code').value='';
-  document.getElementById('my-record-results').innerHTML='';
-  document.getElementById('my-record-overlay').classList.add('show');
-}
-function loadMyRecord(){
-  const code = document.getElementById('my-record-code').value.trim();
-  const employee = employees.find(e=>e.code===code);
-  const box = document.getElementById('my-record-results');
-  if(!employee){ box.innerHTML = '<div class="status-msg err">الرمز غير صحيح</div>'; return; }
-  const mine = attendance.filter(a=>a.employeeId===employee.id).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,20);
-  if(!mine.length){ box.innerHTML = '<div class="empty-state">لا يوجد سجل حضور بعد</div>'; return; }
-  box.innerHTML = `<div style="max-height:280px; overflow-y:auto;">` + mine.map(a=>`
-    <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line); font-size:12.5px;">
-      <span>${a.date}</span>
-      <span style="color:var(--slate);">${timeStr(a.timeInAt)||'—'} → ${timeStr(a.timeOutAt)||'—'} ${a.late?'<span class="pill warn">تأخير</span>':''}</span>
-    </div>`).join('') + `</div>`;
-}
-
-/* ---------------- Overview / stats ---------------- */
-function renderOverview(){
-  if(!adminUnlocked) return;
-  const now = new Date();
-  const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const lastMonthDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
-  const lastMonthKey = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth()+1).padStart(2,'0')}`;
-
-  const activeEmployees = employees.filter(e=>e.status==='نشط');
-  document.getElementById('stat-active-employees').textContent = activeEmployees.length;
-
-  function monthStats(key){
-    const recs = attendance.filter(a=>a.date.startsWith(key) && a.timeInAt);
-    const workDaysSoFar = new Set(recs.map(a=>a.date)).size;
-    const expectedDays = activeEmployees.length * Math.max(1, workDaysSoFar);
-    const rate = expectedDays ? Math.round((recs.length / expectedDays) * 100) : 0;
-    const hoursArr = recs.map(netHours).filter(h=>h!=null);
-    const avgHours = hoursArr.length ? (hoursArr.reduce((a,b)=>a+b,0)/hoursArr.length) : 0;
-    const lateCount = recs.filter(a=>a.late).length;
-    return { rate: Math.min(100,rate), avgHours, lateCount };
-  }
-  const cur = monthStats(thisMonthKey), prev = monthStats(lastMonthKey);
-  document.getElementById('stat-attendance-rate').textContent = cur.rate + '%';
-  document.getElementById('stat-avg-hours').textContent = cur.avgHours.toFixed(1);
-  document.getElementById('stat-late-days').textContent = cur.lateCount;
-  const delta = cur.rate - prev.rate;
-  const deltaEl = document.getElementById('stat-attendance-delta');
-  deltaEl.textContent = delta===0 ? 'بدون تغيير عن الشهر السابق' : `${delta>0?'▲':'▼'} ${Math.abs(delta)}% عن الشهر السابق`;
-  deltaEl.className = 'delta ' + (delta>0?'up':(delta<0?'down':''));
-
-  const hourBuckets = {};
-  attendance.filter(a=>a.timeInAt).forEach(a=>{
-    const h = new Date(a.timeInAt).getHours();
-    hourBuckets[h] = (hourBuckets[h]||0)+1;
-  });
-  const maxCount = Math.max(1, ...Object.values(hourBuckets));
-  const hours = Object.keys(hourBuckets).map(Number).sort((a,b)=>a-b);
-  const heatWrap = document.getElementById('heatmap-wrap');
-  if(!hours.length){ heatWrap.innerHTML = '<div class="empty-state">لا توجد بيانات كافية بعد</div>'; }
-  else{
-    heatWrap.innerHTML = hours.map(h=>{
-      const count = hourBuckets[h];
-      const pct = Math.round((count/maxCount)*100);
-      return `<div class="heat-row"><span class="hlabel">${String(h).padStart(2,'0')}:00</span><div class="heat-bar-wrap"><div class="heat-bar" style="width:${pct}%"></div></div><span class="hcount">${count}</span></div>`;
-    }).join('');
-  }
-}
-
-/* ---------------- Audit log ---------------- */
-function renderAuditLog(){
-  if(!adminUnlocked) return;
-  const list = document.getElementById('audit-list');
-  if(!auditLog.length){ list.innerHTML = '<div class="empty-state">لا توجد عمليات مسجّلة بعد</div>'; return; }
-  list.innerHTML = auditLog.slice(0,50).map(a=>`<div class="audit-item">${escapeHtml(a.text)}<div class="t">${new Date(a.ts).toLocaleString('ar-SA')}</div></div>`).join('');
-}
-
-/* ---------------- Settings ---------------- */
-function fillSettingsForm(){
-  document.getElementById('setting-workstart').value = settings.workStart;
-  document.getElementById('setting-late').value = settings.lateThresholdMin;
-  document.getElementById('setting-code-expiry').value = settings.codeExpiryDays;
-  document.getElementById('setting-idle').value = settings.idleLockMin;
-  document.getElementById('setting-maxattempts').value = settings.maxAttempts;
-  document.getElementById('setting-lockout').value = settings.lockoutMin;
-  document.getElementById('setting-camera').checked = !!settings.cameraEnabled;
-}
-async function saveSettings(){
-  settings = {
-    workStart: document.getElementById('setting-workstart').value || '08:00',
-    lateThresholdMin: parseInt(document.getElementById('setting-late').value) || 0,
-    codeExpiryDays: parseInt(document.getElementById('setting-code-expiry').value) || 0,
-    idleLockMin: parseInt(document.getElementById('setting-idle').value) || 5,
-    maxAttempts: parseInt(document.getElementById('setting-maxattempts').value) || 5,
-    lockoutMin: parseInt(document.getElementById('setting-lockout').value) || 10,
-    cameraEnabled: document.getElementById('setting-camera').checked
-  };
-  await saveSettingsData();
-  logAudit('تم تحديث إعدادات النظام');
-  showToast('تم حفظ الإعدادات');
-  resetIdleTimer();
-}
-
-/* ---------------- CSV export ---------------- */
-function exportMonthlyCsv(){
-  const now = new Date();
-  const key = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const recs = attendance.filter(a=>a.date.startsWith(key));
-  let csv = 'الموظف,التاريخ,وقت الحضور,وقت الانصراف,صافي الساعات,متأخر\n';
-  recs.forEach(a=>{
-    const name = employees.find(e=>e.id===a.employeeId)?.name || '';
-    const nh = netHours(a);
-    csv += `${name},${a.date},${timeStr(a.timeInAt)},${timeStr(a.timeOutAt)},${nh!=null?nh.toFixed(2):''},${a.late?'نعم':'لا'}\n`;
-  });
-  const blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `تقرير-الحضور-${key}.csv`;
-  a.click();
-  logAudit(`تم تصدير تقرير CSV لشهر ${key}`);
-}
-
-/* ---------------- Backup ---------------- */
-function exportBackup(){
-  const data = { employees, attendance, branches, leaves, holidays, settings, exportedAt: new Date().toISOString() };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `نسخة-احتياطية-${localDateStr(new Date())}.json`;
-  a.click();
-  logAudit('تم تصدير نسخة احتياطية كاملة');
-  showToast('تم تصدير النسخة الاحتياطية');
-}
-function importBackup(evt){
-  const file = evt.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = async () => {
-    try{
-      const data = JSON.parse(reader.result);
-      const ok = await confirmDialog('سيتم استبدال جميع البيانات الحالية بالنسخة المستوردة. متابعة؟');
-      if(!ok) return;
-      employees = data.employees || [];
-      attendance = data.attendance || [];
-      branches = data.branches && data.branches.length ? data.branches : branches;
-      leaves = data.leaves || [];
-      holidays = data.holidays || [];
-      if(data.settings) settings = Object.assign(settings, data.settings);
-      await Promise.all([saveEmployees(), saveAttendanceData(), saveBranches(), saveLeaves(), saveHolidays(), saveSettingsData()]);
-      renderAll(); fillSettingsForm();
-      logAudit('تم استيراد نسخة احتياطية');
-      showToast('تم استيراد النسخة بنجاح');
-    }catch(e){ showToast('ملف غير صالح'); }
-  };
-  reader.readAsText(file);
-  evt.target.value = '';
-}
-
-loadAll();
-</script>
-</body>
-</html>
+      showToast(`تم استيراد ${added} موظف بنجاح`)
