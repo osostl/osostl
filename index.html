@@ -424,7 +424,7 @@
             <div class="field"><label>مدة القفل المؤقت (دقيقة)</label><input type="number" id="setting-lockout" min="1"></div>
           </div>
           <div class="field">
-            <label><input type="checkbox" id="setting-camera" style="width:auto; margin-left:6px;">التقاط وحفظ صورة تلقائية عند كل تسجيل حضور/انصراف/استراحة</label>
+            <label><input type="checkbox" id="setting-camera" style="width:auto; margin-left:6px;">جعل التصوير إلزامياً عند كل تسجيل حضور/انصراف/استراحة (لن تكتمل العملية بدون السماح بالكاميرا)</label>
           </div>
           <button class="btn" onclick="saveSettings()">حفظ الإعدادات</button>
         </div>
@@ -1274,8 +1274,26 @@ function checkAttendance(type, retryAccuracy){
     const today = localDateStr(new Date());
     const nowIso = new Date().toISOString();
     let rec = attendance.find(a => a.employeeId===employee.id && a.date===today);
+
+    if(type==='in' && rec && rec.timeInAt){ setAttendanceStatus('تم تسجيل حضورك مسبقاً اليوم', 'err'); return; }
+    if(type==='out' && (!rec || !rec.timeInAt)){ setAttendanceStatus('لم يتم تسجيل حضورك اليوم بعد', 'err'); return; }
+    if(type==='out' && rec && rec.timeOutAt){ setAttendanceStatus('تم تسجيل انصرافك مسبقاً اليوم', 'err'); return; }
+    if(type==='breakstart' && (!rec || !rec.timeInAt)){ setAttendanceStatus('سجّل حضورك أولاً', 'err'); return; }
+    if(type==='breakstart' && rec && rec.breakOutAt){ setAttendanceStatus('تم تسجيل بدء الاستراحة مسبقاً', 'err'); return; }
+    if(type==='breakend' && (!rec || !rec.breakOutAt)){ setAttendanceStatus('لم تبدأ استراحتك بعد', 'err'); return; }
+    if(type==='breakend' && rec && rec.breakInAt){ setAttendanceStatus('تم تسجيل انتهاء الاستراحة مسبقاً', 'err'); return; }
+
+    let photoId = null;
+    if(settings.cameraEnabled){
+      setAttendanceStatus('جارِ فتح الكاميرا — يرجى السماح بالوصول لإتمام العملية…', '');
+      photoId = await captureAndSavePhoto(employee, type);
+      if(!photoId){
+        setAttendanceStatus('التصوير إلزامي لإتمام العملية — الرجاء السماح بالوصول للكاميرا من إعدادات المتصفح ثم إعادة المحاولة', 'err');
+        return;
+      }
+    }
+
     if(type==='in'){
-      if(rec && rec.timeInAt){ setAttendanceStatus('تم تسجيل حضورك مسبقاً اليوم', 'err'); return; }
       if(!rec){ rec = { id: uid(), employeeId: employee.id, date: today, timeInAt:'', breakOutAt:'', breakInAt:'', timeOutAt:'', distance: Math.round(match.dist) }; attendance.push(rec); }
       rec.timeInAt = nowIso; rec.distance = Math.round(match.dist);
       const dow = new Date(nowIso).getDay();
@@ -1285,27 +1303,15 @@ function checkAttendance(type, retryAccuracy){
       const threshold = new Date(nowIso); threshold.setHours(h, m + settings.lateThresholdMin, 0, 0);
       rec.late = new Date(nowIso) > threshold;
     }else if(type==='out'){
-      if(!rec || !rec.timeInAt){ setAttendanceStatus('لم يتم تسجيل حضورك اليوم بعد', 'err'); return; }
-      if(rec.timeOutAt){ setAttendanceStatus('تم تسجيل انصرافك مسبقاً اليوم', 'err'); return; }
       rec.timeOutAt = nowIso;
     }else if(type==='breakstart'){
-      if(!rec || !rec.timeInAt){ setAttendanceStatus('سجّل حضورك أولاً', 'err'); return; }
-      if(rec.breakOutAt){ setAttendanceStatus('تم تسجيل بدء الاستراحة مسبقاً', 'err'); return; }
       rec.breakOutAt = nowIso;
     }else if(type==='breakend'){
-      if(!rec || !rec.breakOutAt){ setAttendanceStatus('لم تبدأ استراحتك بعد', 'err'); return; }
-      if(rec.breakInAt){ setAttendanceStatus('تم تسجيل انتهاء الاستراحة مسبقاً', 'err'); return; }
       rec.breakInAt = nowIso;
     }
+    if(photoId){ rec.photos = rec.photos || {}; rec.photos[type] = photoId; }
     await saveAttendanceData();
     renderAttendance(); renderOverview();
-    const photoId = await captureAndSavePhoto(employee, type);
-    if(photoId){
-      rec.photos = rec.photos || {};
-      rec.photos[type] = photoId;
-      await saveAttendanceData();
-      renderAttendance();
-    }
     const labels = { in:'تسجيل حضورك', out:'تسجيل انصرافك', breakstart:'بدء استراحتك', breakend:'انتهاء استراحتك' };
     document.getElementById('checkin-code').value = '';
     setAttendanceStatus(`تم ${labels[type]} يا ${employee.name} — ${timeStr(nowIso)} ✓${rec.late && type==='in' ? ' (تأخير)' : ''}`, 'ok');
